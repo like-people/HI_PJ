@@ -19,5 +19,5 @@ moim/
   cli.py      통합 실행 틀(최소판)
 tests/        기본 동작 테스트(test_basic.py)
 tools/        check_imports.py, gen_data.py
-docs/         규약.md, 은행거래내역형식.md
+docs/         규약.md, 은행거래내역형식.md, 작업방식.md(Git·병합 요청 방법)
 ```
