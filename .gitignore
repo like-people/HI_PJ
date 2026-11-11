@@ -1,0 +1,14 @@
+# 실행하며 생기는 파일(저장소에 올리지 않는다)
+data.json
+*.bak
+backup/
+logs/
+config.json
+rules.json
+sample/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/

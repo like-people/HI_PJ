@@ -1,0 +1,21 @@
+{
+  "group": "AI 동아리",
+  "data": "data.json",
+  "members_file": "members.txt",
+  "rules": "rules.json",
+  "backup_dir": "backup",
+  "log_dir": "logs",
+  "treasurer": "김민수",
+  "budget": {
+    "monthly": 1500000,
+    "by_category": {
+      "식비": 800000,
+      "장소": 300000,
+      "교통": 100000
+    }
+  },
+  "dues": {
+    "monthly": 20000
+  },
+  "warn_ratio": 0.8
+}
