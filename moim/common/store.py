@@ -13,6 +13,7 @@ EMPTY = {
     "members": [],      # {"name", "joined", "left"}
     "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo"}
     "next_id": 1,
+    "locks": [],        # 기능 4: 확정 기간 {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
 }
 
 

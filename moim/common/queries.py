@@ -49,6 +49,16 @@ def member_shares(store, start, end):
     raise NotImplementedError("기능 4 담당이 구현한다")
 
 
+# 담당: 기능 4(김영광)
 def is_locked(store, on):
-    """정산이 확정된 기간에 속하는 날짜인가. 담당: 기능 4"""
-    raise NotImplementedError("기능 4 담당이 구현한다")
+    """정산이 확정된 기간에 속하는 날짜인가. 담당: 기능 4
+
+    store.data["locks"] 의 기간 가운데 하나라도 on 을 포함하면 True.
+    기간은 시작일·끝일을 모두 포함한다(dates.in_period).
+
+    locks 한 칸의 형식(settle.lock_period 가 이 모양으로 추가한다):
+        {"start": "2026-11-01", "end": "2026-11-30"}   # 날짜는 "YYYY-MM-DD" 문자열
+    on 은 "YYYY-MM-DD" 문자열이나 datetime.date 둘 다 된다.
+    locks 항목이 없는 옛 자료 파일이면 확정 기간이 없는 것으로 본다.
+    """
+    return any(dates.in_period(on, lk["start"], lk["end"]) for lk in store.data.get("locks", []))
