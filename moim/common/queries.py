@@ -31,8 +31,18 @@ def person_paid(store, start, end):
 
 def is_member_active(store, name, on):
     """그날 모임 회원인가. 가입일 이상, 탈퇴일 이하(탈퇴일 당일까지는 회원). 담당: 기능 5"""
-    raise NotImplementedError("기능 5 담당이 구현한다")
+    day = dates.parse(on)
+    member = store.member(name)
 
+    if member is None:
+        return False
+
+    joined = dates.parse(member["joined"])
+    left = member.get("left")
+
+    return joined <= day and (
+        left is None or day <= dates.parse(left)
+    )
 
 def active_members(store, on):
     """그날의 회원 이름 목록(명부 순서). 담당: 기능 5"""
