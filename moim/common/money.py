@@ -27,6 +27,7 @@ def remainder_order(members, payer=None):
     return order
 
 
+# 담당: 기능 4(김영광)
 def split(amount, members, payer=None, weights=None):
     """금액을 참여자에게 나눈다. 돌려주는 값: {이름: 부담액}. 합계는 항상 amount 와 같다.
 
@@ -38,8 +39,9 @@ def split(amount, members, payer=None, weights=None):
     if amount < 0:
         raise ValueError("금액은 음수일 수 없습니다")
     if weights:
-        raise NotImplementedError("비율 분배는 기능 4 담당이 구현한다")
-    w = {m: 1 for m in members}
+        w = {m: weights[m] for m in members}
+    else:
+        w = {m: 1 for m in members}
     total_w = sum(w.values())
     shares = {m: amount * w[m] // total_w for m in members}
     rest = amount - sum(shares.values())
