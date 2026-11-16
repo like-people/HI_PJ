@@ -9,9 +9,12 @@ def expenses_in(store, start, end, include_deleted=False):
     raise NotImplementedError("기능 3 담당이 구현한다")
 
 
+
+# 담당: 기능 6(류강현)
 def period_total(store, start, end):
-    """기간 합계. 담당: 기능 6"""
-    raise NotImplementedError("기능 6 담당이 구현한다")
+    """기간 합계. 삭제된 지출은 제외한다. 담당: 기능 6"""
+    expenses = expenses_in(store, start, end)
+    return sum(expense["amount"] for expense in expenses)
 
 
 def category_of(e):
