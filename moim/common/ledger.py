@@ -10,9 +10,30 @@ def validate(store, date, payer, amount, members, weights=None):
     raise NotImplementedError("기능 1 담당이 구현한다")
 
 
+
 def duplicates(store, date, payer, amount, exclude_id=None):
     """같은 날·같은 금액·같은 사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
-    raise NotImplementedError("기능 6 담당이 구현한다")
+    target_date = dates.fmt(date)
+
+    result = []
+    for expense in store.data["expenses"]:
+        # 삭제된 지출은 중복 검사에서 제외한다.
+        if expense.get("deleted", False):
+            continue
+
+        # 수정 중인 지출 자신은 중복 결과에서 제외한다.
+        if exclude_id is not None and expense.get("id") == exclude_id:
+            continue
+
+        if (
+            dates.fmt(expense["date"]) == target_date
+            and expense["payer"] == payer
+            and expense["amount"] == amount
+        ):
+            result.append(expense["id"])
+
+    return sorted(result)
+
 
 
 def insert(store, date, payer, amount, members, memo="", weights=None, category=None,
