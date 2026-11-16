@@ -50,7 +50,8 @@ def in_period(value, start, end):
 
 
 def month_key(value):
-    raise NotImplementedError("기능 6 담당이 구현한다")
+    """날짜 문자열/date를 YYYY-MM 형식의 달 이름으로 변환한다. 담당: 기능 6"""
+    return parse(value).strftime("%Y-%m")
 
 
 def prev_month(year, month):
