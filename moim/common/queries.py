@@ -43,6 +43,8 @@ def is_member_active(store, name, on):
     return joined <= day and (
         left is None or day <= dates.parse(left)
     )
+
+
 # 담당: 기능 5(이정배)
 def active_members(store, on):
     """그날의 회원 이름 목록(명부 순서). 담당: 기능 5"""
