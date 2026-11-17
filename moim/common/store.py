@@ -11,9 +11,11 @@ import os
 
 EMPTY = {
     "members": [],      # {"name", "joined", "left"}
-    "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo"}
+    "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo", "weights"(기능 4)}
     "next_id": 1,
     "locks": [],        # 기능 4: 확정 기간 {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
+    "transfers": [],    # 기능 4: 이미 보낸 송금 {"date": "YYYY-MM-DD", "from", "to", "amount"}
+    "recurring": [],    # 기능 4: 반복 지출 {"id", "day", "payer", "amount", "members", "weights", "memo", "start_month", "last_month"}
 }
 
 
