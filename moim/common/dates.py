@@ -61,9 +61,16 @@ def next_month(year, month):
     return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
+# 담당: 기능 5(이정배)
 def months_between(start_ym, end_ym):
     """(y,m) 부터 (y,m) 까지 달 목록. 둘 다 포함."""
-    raise NotImplementedError("기능 5 담당이 구현한다")
+    months = []
+    current = start_ym
+    while current <= end_ym:
+        months.append(current)
+        current = next_month(*current)
+    return months
+
 
 
 def today():
