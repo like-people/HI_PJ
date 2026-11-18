@@ -56,9 +56,14 @@ def active_members(store, on):
     ]
 
 
+# 담당: 기능 4(김영광)
 def expense_shares(e):
-    """지출 하나의 사람별 부담액. 담당: 기능 4"""
-    raise NotImplementedError("기능 4 담당이 구현한다")
+    """지출 하나의 사람별 부담액. 담당: 기능 4
+
+    돌려주는 값: {이름: 부담액}, members 순서. 합계는 지출 금액과 같다.
+    weights 가 없거나 null 이면 균등 분배(money.split). 삭제 여부는 보지 않는다(부르는 쪽이 거른다).
+    """
+    return money.split(e["amount"],e["members"],e["payer"],e.get("weights"))
 
 
 def member_shares(store, start, end):
