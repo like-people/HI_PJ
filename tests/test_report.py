@@ -9,6 +9,7 @@ import unittest
 from helpers import NAMES, StoreCase
 
 from moim.common import queries, textfmt
+from moim.features import report
 
 KIM = NAMES[0]
 
@@ -196,6 +197,77 @@ class BarChartTest(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(textfmt.bar_chart({}), "")
+
+
+class ReportTotals(StoreCase):
+    def put(self, eid, date, payer, amount, category=None, deleted=None):
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(NAMES), "category": category, "memo": ""}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def fill(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-10-15", kim, 3000, "식비")
+        self.put(2, "2026-11-12", lee, 6000, "식비")
+        self.put(3, "2026-11-13", kim, 9000, "교통")
+        self.put(4, "2026-11-14", park, 500, "식비", deleted=True)
+
+    def test_monthly_one_month(self):
+        self.fill()
+        self.assertEqual(report.monthly_totals(self.store, "2026-11", "2026-11"), {"2026-11": 15000})
+
+    def test_monthly_range_includes_empty_month(self):
+        self.fill()
+             self.assertEqual(report.monthly_totals(self.store, "2026-10", "2026-12"),
+                         {"2026-10": 3000, "2026-11": 15000, "2026-12": 0})
+
+    def test_monthly_over_year_end(self):
+        self.put(1, "2026-12-31", NAMES[0], 100)
+        self.put(2, "2027-01-01", NAMES[0], 200)
+        self.assertEqual(report.monthly_totals(self.store, "2026-12", "2027-01"),
+                         {"2026-12": 100, "2027-01": 200})
+
+    def test_monthly_leap_february_end(self):
+        self.put(1, "2028-02-29", NAMES[0], 700)
+        self.assertEqual(report.monthly_totals(self.store, "2028-02", "2028-02"), {"2028-02": 700})
+
+    def test_monthly_skips_deleted(self):
+        self.fill()
+        self.assertEqual(report.monthly_totals(self.store, "2026-11", "2026-11")["2026-11"], 15000)
+
+    def test_monthly_reversed_is_empty(self):
+        self.fill()
+        self.assertEqual(report.monthly_totals(self.store, "2026-12", "2026-10"), {})
+
+    def test_monthly_bad_month_text(self):
+        with self.assertRaises(ValueError):
+            report.monthly_totals(self.store, "2026-13", "2026-12")
+
+    def test_summary_total_matches_expenses(self):
+        self.fill()
+        got = report.period_summary(self.store, "2026-11-10", "2026-11-20")
+        self.assertEqual(got["total"], 15000)
+
+    def test_summary_by_category_big_first(self):
+        self.fill()
+        got = report.period_summary(self.store, "2026-11-10", "2026-11-20")
+        self.assertEqual(list(got["by_category"].items()), [("교통", 9000), ("식비", 6000)])
+
+    def test_summary_by_person(self):
+        self.fill()
+        kim, lee, park = NAMES
+        got = report.period_summary(self.store, "2026-11-10", "2026-11-20")
+        self.assertEqual(got["by_person"], {kim: 9000, lee: 6000})
+
+    def test_summary_keys(self):
+        got = report.period_summary(self.store, "2026-11-10", "2026-11-20")
+        self.assertEqual(set(got), {"total", "by_category", "by_person"})
+
+    def test_summary_empty_period(self):
+        got = report.period_summary(self.store, "2026-11-10", "2026-11-20")
+        self.assertEqual(got, {"total": 0, "by_category": {}, "by_person": {}})
 
 
 if __name__ == "__main__":
