@@ -68,7 +68,18 @@ def record_transfer(store, date, frm, to, amount):
 
 def lock_period(store, start, end):
     """정산을 확정한다. 이 기간의 지출은 더 이상 추가·수정·삭제할 수 없다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    first, last = dates.fmt(start), dates.fmt(end)
+    if first > last:
+        raise ValueError(f"시작일이 끝일보다 늦습니다: {first} ~ {last}")
+    # 공고문: 잔액 합이 0이 아니면 확정하지 않는다.
+    total = balance_sum(balances(store, first, last))
+    if total != 0:
+        raise ValueError(f"잔액 합이 0이 아니어서 확정할 수 없습니다: {total}")
+    # 규격 4-2: 부를 때마다 한 칸씩 추가하고 겹쳐도 합치지 않는다. 완전히 같은 기간은 다시 넣지 않는다.
+    lock = {"start": first, "end": last}
+    if lock not in store.data["locks"]:
+        store.data["locks"].append(lock)
+    return lock
 
 
 def statement(store, start, end, person):
