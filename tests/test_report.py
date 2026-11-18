@@ -8,7 +8,7 @@ import unittest
 
 from helpers import NAMES, StoreCase
 
-from moim.common import queries
+from moim.common import queries, textfmt
 
 KIM = NAMES[0]
 
@@ -106,6 +106,96 @@ class PersonPaid(StoreCase):
 
     def test_empty(self):
         self.assertEqual(self.paid(), {})
+
+
+class TableTest(unittest.TestCase):
+    HEAD = ["번호", "이름", "금액"]
+
+    def test_commas_and_right_align(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500], [2, "이서연", 12000]], numeric={2})
+        want = "\n".join([
+            "번호  이름      금액",
+            "--------------------",
+            "1     김민수   1,500",
+            "2     이서연  12,000",
+        ])
+        self.assertEqual(got, want)
+
+    def test_total_row_is_whole_line(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500], [2, "이서연", 12000]],
+                            total=["합계", "", 13500], numeric={2})
+        self.assertEqual(got.splitlines()[-2], "-" * 20)
+        self.assertEqual(got.splitlines()[-1], "합계          13,500")
+
+    def test_no_total_line_when_none(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500]], numeric={2})
+        self.assertEqual(len(got.splitlines()), 3)
+
+    def test_non_numeric_column_keeps_digits(self):
+        got = textfmt.table(["번호", "금액"], [[1234, 5000]], numeric={1})
+        self.assertIn("1234", got)
+        self.assertIn("5,000", got)
+        self.assertNotIn("1,234", got)
+
+    def test_negative_number(self):
+        got = textfmt.table(["번호", "금액"], [[1, -5000]], numeric={1})
+        self.assertIn("-5,000", got)
+
+    def test_korean_width_aligns(self):
+        got = textfmt.table(["이름", "금액"], [["김", 1], ["김민수", 22]], numeric={1})
+        widths = {textfmt.width(line) for line in got.splitlines() if not line.startswith("-")}
+        self.assertEqual(len(widths), 1)
+
+    def test_empty_rows(self):
+        self.assertEqual(textfmt.table(["이름"], []), "이름\n----")
+
+
+class BarChartTest(unittest.TestCase):
+    def test_largest_fills_bar_width(self):
+        got = textfmt.bar_chart({"식비": 30000, "교통": 15000}, bar_width=10)
+        lines = got.splitlines()
+        self.assertEqual(lines[0].count("#"), 10)
+        self.assertEqual(lines[1].count("#"), 5)
+
+    def test_value_with_commas_at_end(self):
+        got = textfmt.bar_chart({"식비": 30000, "교통": 15000}, bar_width=10)
+        self.assertEqual(got, "\n".join([
+            "식비  ##########  30,000",
+            "교통  #####       15,000",
+        ]))
+
+    def test_zero_has_no_bar_but_number(self):
+        got = textfmt.bar_chart({"식비": 1000, "미분류": 0}, bar_width=5)
+        zero_line = got.splitlines()[1]
+        self.assertNotIn("#", zero_line)
+        self.assertTrue(zero_line.endswith("0"))
+
+    def test_negative_has_no_bar_but_number(self):
+        got = textfmt.bar_chart({"식비": 1000, "환불": -500}, bar_width=5)
+        negative_line = got.splitlines()[1]
+        self.assertNotIn("#", negative_line)
+        self.assertTrue(negative_line.endswith("-500"))
+
+    def test_small_positive_gets_one_char(self):
+        got = textfmt.bar_chart({"식비": 30000, "기타": 1}, bar_width=10)
+        self.assertEqual(got.splitlines()[1].count("#"), 1)
+
+    def test_all_zero_has_no_bars(self):
+        got = textfmt.bar_chart({"a": 0, "b": 0}, bar_width=5)
+        self.assertNotIn("#", got)
+
+    def test_custom_char(self):
+        got = textfmt.bar_chart({"a": 3, "b": 1}, bar_width=4, char="*")
+        self.assertEqual(got.splitlines()[0].count("*"), 4)
+        self.assertNotIn("#", got)
+
+    def test_korean_names_align(self):
+        got = textfmt.bar_chart({"김": 1000, "김민수": 500}, bar_width=5)
+        starts = {textfmt.width(line.split("#")[0]) for line in got.splitlines()}
+        self.assertEqual(len(starts), 1)
+
+    def test_empty(self):
+        self.assertEqual(textfmt.bar_chart({}), "")
 
 
 if __name__ == "__main__":

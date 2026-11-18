@@ -87,9 +87,15 @@ def expense_shares(e):
     return money.split(e["amount"],e["members"],e["payer"],e.get("weights"))
 
 
+# 담당: 기능 4(김영광)
 def member_shares(store, start, end):
     """기간 동안 사람마다 부담할 돈 합계. 담당: 기능 4"""
-    raise NotImplementedError("기능 4 담당이 구현한다")
+    owed = {}
+    for e in expenses_in(store, start, end):
+        for name, share in expense_shares(e).items():
+            owed[name] = owed.get(name, 0) + share
+    names = [m["name"] for m in store.data["members"]]
+    return {name: owed[name] for name in names if owed.get(name)}
 
 
 # 담당: 기능 4(김영광)
