@@ -6,14 +6,20 @@ from .rules import UNCATEGORIZED  # noqa: F401
 
 def expenses_in(store, start, end, include_deleted=False):
     """기간 안의 지출 목록(시작일·끝일 포함). 담당: 기능 3"""
-    raise NotImplementedError("기능 3 담당이 구현한다")
+    found = [
+        e
+        for e in store.data["expenses"]
+        if dates.in_period(e["date"], start, end)
+        and (include_deleted or not e.get("deleted"))
+    ]
+    return sorted(found, key=lambda e: (e["date"], e["id"]))
 
 
 def period_total(store, start, end):
     """기간 합계. 담당: 기능 6"""
     raise NotImplementedError("기능 6 담당이 구현한다")
 
-
+# 담당: 기능 2(백지윤)
 def category_of(e):
     """지출의 분류 이름. 분류가 없으면 규약의 "미분류". 담당: 기능 2"""
     category = e.get("category")
@@ -21,7 +27,7 @@ def category_of(e):
         return UNCATEGORIZED
     return category
 
-
+# 담당: 기능 2(백지윤)
 def category_totals(store, start, end):
     """분류별 건수와 금액. {분류: {"count": n, "amount": 원}} 담당: 기능 2"""
     totals = {}
@@ -65,9 +71,14 @@ def active_members(store, on):
     ]
 
 
+# 담당: 기능 4(김영광)
 def expense_shares(e):
-    """지출 하나의 사람별 부담액. 담당: 기능 4"""
-    raise NotImplementedError("기능 4 담당이 구현한다")
+    """지출 하나의 사람별 부담액. 담당: 기능 4
+
+    돌려주는 값: {이름: 부담액}, members 순서. 합계는 지출 금액과 같다.
+    weights 가 없거나 null 이면 균등 분배(money.split). 삭제 여부는 보지 않는다(부르는 쪽이 거른다).
+    """
+    return money.split(e["amount"],e["members"],e["payer"],e.get("weights"))
 
 
 def member_shares(store, start, end):

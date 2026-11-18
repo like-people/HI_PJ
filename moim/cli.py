@@ -35,11 +35,15 @@ def run(args, cfg, store, out=print):
             return mod.run(getattr(args, "cmd", None), args, cfg, store, out)
     raise ValueError(f"모르는 명령입니다: {args.group}")
 
-
 def main(argv=None, out=print):
     args = build_parser().parse_args(argv)
-    cfg = cfgmod.load(args.config)
-    store = Store(cfg["data"]).load()
-    if run(args, cfg, store, out):
-        store.save()
+    try:
+        cfg = cfgmod.load(args.config)
+        store = Store(cfg["data"]).load()
+        if run(args, cfg, store, out):
+            store.save()
+    except (ValueError, FileNotFoundError, FileExistsError) as exc: 
+        reason = " ".join(str(exc).splitlines())
+        out(f"오류: {reason}")
+        return 1
     return 0
