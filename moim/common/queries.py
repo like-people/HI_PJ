@@ -6,7 +6,13 @@ from .rules import UNCATEGORIZED  # noqa: F401
 
 def expenses_in(store, start, end, include_deleted=False):
     """기간 안의 지출 목록(시작일·끝일 포함). 담당: 기능 3"""
-    raise NotImplementedError("기능 3 담당이 구현한다")
+    found = [
+        e
+        for e in store.data["expenses"]
+        if dates.in_period(e["date"], start, end)
+        and (include_deleted or not e.get("deleted"))
+    ]
+    return sorted(found, key=lambda e: (e["date"], e["id"]))
 
 
 def period_total(store, start, end):
