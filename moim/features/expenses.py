@@ -25,7 +25,7 @@ def add_member(store, name, joined):
 def leave_member(store, name, left):
     raise NotImplementedError("이 함수를 구현한다")
 
-
+# 담당: 설정 파일(백지윤)
 def load_members_file(store, path):
     """명부 파일을 읽어 명부에 반영한다. 한 줄 형식: 이름,가입일[,탈퇴일]. '#' 줄과 빈 줄은 건너뛴다.
     이미 있는 사람은 탈퇴일만 반영한다. 돌려주는 값: (추가한 이름, 탈퇴 반영한 이름, [(줄 번호, 오류)])"""
