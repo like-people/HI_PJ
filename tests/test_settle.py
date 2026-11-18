@@ -2,7 +2,7 @@ import datetime
 import json
 import unittest
 
-from helpers import StoreCase
+from helpers import NAMES, StoreCase
 
 from moim.common import money, queries
 from moim.common.store import Store
@@ -132,6 +132,75 @@ class BalanceSum(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(settle.balance_sum({}), 0)
+
+
+class MemberShares(StoreCase):
+    S, E = "2026-11-01", "2026-11-30"
+
+    def put(self, eid, date, payer, amount, members, weights=None, deleted=None):
+        """기능 1(add_expense) 없이도 돌도록 지출 dict 를 자료에 직접 넣는다."""
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(members), "weights": weights, "category": None, "memo": ""}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def shares(self, start=S, end=E):
+        return queries.member_shares(self.store, start, end)
+
+    def test_equal_split_remainder(self):
+        # 10,000원을 셋이 나누고 이서연이 냄 → 나머지 1원은 낸 사람(규약 2절)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", lee, 10000, NAMES)
+        self.assertEqual(self.shares(), {kim: 3333, lee: 3334, park: 3333})
+
+    def test_weights(self):
+        # 10,001원, 2:1:1, 이서연이 냄 → 김 5,000 · 이 2,501 · 박 2,500(규격 0-3 예)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", lee, 10001, NAMES, weights={kim: 2, lee: 1, park: 1})
+        self.assertEqual(self.shares(), {kim: 5000, lee: 2501, park: 2500})
+
+    def test_sums_over_expenses(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", lee, 9000, NAMES)
+        self.put(2, "2026-11-11", kim, 4000, [kim, park])
+        self.assertEqual(self.shares(), {kim: 5000, lee: 3000, park: 5000})
+
+    def test_only_people_with_share(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", kim, 4000, [kim, park])
+        self.assertNotIn(lee, self.shares())
+
+    def test_member_order(self):
+        # 지출에 나온 순서(박 → 김)와 상관없이 명부 순서(김 → 박)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", park, 2000, [park, kim])
+        self.assertEqual(list(self.shares()), [kim, park])
+
+    def test_skips_deleted(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", kim, 3000, NAMES, deleted=True)
+        self.put(2, "2026-11-11", kim, 3000, NAMES)
+        self.assertEqual(self.shares(), {kim: 1000, lee: 1000, park: 1000})
+
+    def test_period_includes_start_and_end(self):
+        kim = NAMES[0]
+        self.put(1, "2026-10-31", kim, 1, [kim])
+        self.put(2, "2026-11-01", kim, 10, [kim])
+        self.put(3, "2026-11-30", kim, 100, [kim])
+        self.put(4, "2026-12-01", kim, 1000, [kim])
+        self.assertEqual(self.shares(), {kim: 110})
+
+    def test_total_equals_expense_total(self):
+        # 규격 4-1: 부담액 합계 = 기간 지출 합계(통합 시나리오 6-2 4번)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", lee, 10000, NAMES)
+        self.put(2, "2026-11-11", kim, 10001, NAMES, weights={kim: 2, lee: 1, park: 1})
+        self.put(3, "2026-11-12", park, 7, [kim, park])
+        self.assertEqual(sum(self.shares().values()), 10000 + 10001 + 7)
+
+    def test_empty(self):
+        self.assertEqual(self.shares(), {})
 
 
 if __name__ == "__main__":
