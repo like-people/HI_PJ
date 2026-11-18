@@ -1,4 +1,4 @@
-"""설정 파일. 팀 공동 작업 "설정 파일" 담당이 항목을 채운다.
+"""설정 파일. 담당: 팀 공동 작업 "설정 파일"(백지윤).
 
 항목 이름은 docs/규격합의_기능별.md 8절에서 확정했다.
 경로 항목(PATH_KEYS)은 설정 파일이 있는 폴더 기준으로 바꾼다.
@@ -15,9 +15,9 @@ DEFAULT = {
     "rules": "rules.json",
     "backup_dir": "backup",
     "log_dir": "logs",
-    "treasurer": None,
-    "budget": {"monthly": None, "by_category": {}},
-    "dues": {"monthly": None},
+    "treasurer": None,                                # None 은 미설정
+    "budget": {"monthly": None, "by_category": {}},   # monthly None 은 미설정
+    "dues": {"monthly": None},                        # monthly None 은 미설정
     "warn_ratio": 0.8,
 }
 PATH_KEYS = ("data", "members_file", "rules", "backup_dir", "log_dir")   # 설정 파일이 있는 폴더 기준으로 바꿀 경로 항목
