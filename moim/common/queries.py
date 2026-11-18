@@ -13,7 +13,7 @@ def period_total(store, start, end):
     """기간 합계. 담당: 기능 6"""
     raise NotImplementedError("기능 6 담당이 구현한다")
 
-
+# 담당: 기능 2(백지윤)
 def category_of(e):
     """지출의 분류 이름. 분류가 없으면 규약의 "미분류". 담당: 기능 2"""
     category = e.get("category")
@@ -21,7 +21,7 @@ def category_of(e):
         return UNCATEGORIZED
     return category
 
-
+# 담당: 기능 2(백지윤)
 def category_totals(store, start, end):
     """분류별 건수와 금액. {분류: {"count": n, "amount": 원}} 담당: 기능 2"""
     totals = {}
