@@ -270,5 +270,80 @@ class ReportTotals(StoreCase):
         self.assertEqual(got, {"total": 0, "by_category": {}, "by_person": {}})
 
 
+class ReportCompare(StoreCase):
+    def put(self, eid, date, amount, deleted=None):
+        e = {"id": eid, "date": date, "payer": NAMES[0], "amount": amount,
+             "members": list(NAMES), "category": None, "memo": ""}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def test_month_over_month_increase(self):
+        self.put(1, "2026-10-05", 3000)
+        self.put(2, "2026-11-12", 15000)
+        self.assertEqual(report.month_over_month(self.store, "2026-11"), (15000, 3000, 12000, 400))
+
+    def test_month_over_month_decrease(self):
+        self.put(1, "2026-10-05", 15000)
+        self.put(2, "2026-11-12", 3000)
+        self.assertEqual(report.month_over_month(self.store, "2026-11"), (3000, 15000, -12000, -80))
+
+    def test_month_over_month_last_month_zero_has_no_percent(self):
+        self.put(1, "2026-11-12", 3000)
+        self.assertEqual(report.month_over_month(self.store, "2026-11"), (3000, 0, 3000, None))
+
+    def test_month_over_month_both_zero(self):
+        self.assertEqual(report.month_over_month(self.store, "2026-11"), (0, 0, 0, None))
+
+    def test_month_over_month_rounds_half_away_from_zero(self):
+        self.put(1, "2026-10-05", 8)
+        self.put(2, "2026-11-05", 9)    # +12.5% -> 13
+        self.put(3, "2026-08-05", 8)
+        self.put(4, "2026-09-05", 7)    # -12.5% -> -13
+        self.assertEqual(report.month_over_month(self.store, "2026-11")[3], 13)
+        self.assertEqual(report.month_over_month(self.store, "2026-09")[3], -13)
+
+    def test_month_over_month_across_year(self):
+        self.put(1, "2026-12-10", 1000)
+        self.put(2, "2027-01-10", 1500)
+        self.assertEqual(report.month_over_month(self.store, "2027-01"), (1500, 1000, 500, 50))
+
+    def test_month_over_month_skips_deleted(self):
+        self.put(1, "2026-10-05", 1000)
+        self.put(2, "2026-10-06", 9000, deleted=True)
+        self.put(3, "2026-11-05", 1000)
+        self.assertEqual(report.month_over_month(self.store, "2026-11"), (1000, 1000, 0, 0))
+
+    def test_weekday_totals_has_all_seven_days(self):
+        got = report.weekday_totals(self.store, "2026-11-01", "2026-11-30")
+        self.assertEqual(list(got), ["월", "화", "수", "목", "금", "토", "일"])
+        self.assertEqual(sum(got.values()), 0)
+
+    def test_weekday_totals_sums_by_weekday(self):
+        self.put(1, "2026-11-12", 6000)   # 목요일
+        self.put(2, "2026-11-19", 1000)   # 목요일
+        self.put(3, "2026-11-13", 9000)   # 금요일
+        self.put(4, "2026-11-14", 500, deleted=True)
+        got = report.weekday_totals(self.store, "2026-11-01", "2026-11-30")
+        self.assertEqual(got["목"], 7000)
+        self.assertEqual(got["금"], 9000)
+        self.assertEqual(got["토"], 0)
+
+    def test_week_totals_monday_keys(self):
+        self.put(1, "2026-11-15", 100)    # 일요일: 11/09 주
+        self.put(2, "2026-11-16", 200)    # 월요일: 11/16 주
+        got = report.week_totals(self.store, "2026-11-09", "2026-11-22")
+        self.assertEqual(got, {"2026-11-09": 100, "2026-11-16": 200})
+
+    def test_week_totals_includes_empty_weeks_and_partial_first_week(self):
+        self.put(1, "2026-11-12", 500)
+        got = report.week_totals(self.store, "2026-11-12", "2026-11-30")
+        self.assertEqual(list(got), ["2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"])
+        self.assertEqual(got["2026-11-09"], 500)
+
+    def test_week_totals_reversed_is_empty(self):
+        self.assertEqual(report.week_totals(self.store, "2026-11-30", "2026-11-01"), {})
+
+
 if __name__ == "__main__":
     unittest.main()
