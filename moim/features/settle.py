@@ -58,7 +58,14 @@ def exclude_member(store, eid, name):
 
 def compare(old_rows, new_rows):
     """이전 정산과 비교: {이름: (이전 잔액, 지금 잔액, 차이)}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 순서: 지금 정산(명부 순서) 다음에 이전 정산에만 있는 사람. 한쪽에 없으면 잔액 0, 차이 = 지금 - 이전.
+    names = list(new_rows) + [name for name in old_rows if name not in new_rows]
+    result = {}
+    for name in names:
+        before = old_rows[name]["balance"] if name in old_rows else 0
+        now = new_rows[name]["balance"] if name in new_rows else 0
+        result[name] = (before, now, now - before)
+    return result
 
 
 def add_recurring(store, day, payer, amount, members, memo, start_month):
