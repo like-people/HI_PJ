@@ -202,7 +202,7 @@ class Store:
         self.data = restored
         self.recovered_from = recovered_path
         return self
-    # 담당: 지출변경이력(이승경)
+    # 담당: 기능1(이승경)
     def record(self, action, eid, before, after):
         """지출 변경 전후의 사본을 이력에 추가한다."""
         self.data["history"].append({
