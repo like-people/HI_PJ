@@ -15,7 +15,7 @@ import json
 import os
 import tempfile
 from ..common import money
-from ..common.queries import category_of, category_totals
+from ..common.queries import category_of, category_totals, is_locked
 from ..common.rules import UNCATEGORIZED
 
 
@@ -55,6 +55,7 @@ def add_rule(rules, category, keywords=None, priority=0, payer=None, min_amount=
 def remove_rule(rules, index):
     return rules.pop(index)
 
+
 def matches(rule, e):
     """규칙의 조건을 모두 만족하는가. 키워드는 하나라도 메모에 있으면 만족."""
     keywords = rule.get("keywords") or []
@@ -81,6 +82,7 @@ def classify(e, rules):
             best = rule
     return best["category"] if best else None
 
+
 def _find(store, eid):
     for e in store.data["expenses"]:
         if e["id"] == eid:
@@ -90,12 +92,20 @@ def _find(store, eid):
     raise ValueError(f"없는 지출 번호입니다: {eid}")
 
 
+def _find_unlocked(store, eid):
+    e = _find(store, eid)
+    if is_locked(store, e["date"]):
+        raise ValueError(f"정산이 확정된 기간의 지출은 분류를 바꿀 수 없습니다: {eid}")
+    return e
+
+
 def apply_rules(store, rules, preview=False):
-    """전체 지출을 다시 분류한다. 직접 정한 분류(고정)는 건너뛴다.
+    """전체 지출을 다시 분류한다. 직접 정한 분류(고정)와 정산이 확정된 기간의 지출은 건너뛴다.
+    맞는 규칙이 없는 지출은 이전 분류를 그대로 둔다.
     돌려주는 값: 바뀌는 목록 [(번호, 이전 분류, 새 분류)]. preview=True 면 실제로 바꾸지 않는다."""
     changes = []
     for e in store.data["expenses"]:
-        if e.get("deleted") or e.get("category_fixed"):
+        if e.get("deleted") or e.get("category_fixed") or is_locked(store, e["date"]):
             continue
         new = classify(e, rules)
         if new is None:
@@ -112,14 +122,14 @@ def set_category(store, eid, category):
     """분류를 직접 정한다. 다시 분류해도 바뀌지 않게 고정한다."""
     if not isinstance(category, str) or not category.strip():
         raise ValueError("분류 이름이 비어 있습니다")
-    e = _find(store, eid)
+    e = _find_unlocked(store, eid)
     category = category.strip()
     e["category"] = None if category == UNCATEGORIZED else category
     e["category_fixed"] = True
 
 
 def unfix_category(store, eid):
-    e = _find(store, eid)
+    e = _find_unlocked(store, eid)
     e["category_fixed"] = False
 
 
