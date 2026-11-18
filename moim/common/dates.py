@@ -48,7 +48,7 @@ def in_period(value, start, end):
     d = parse(value)
     return parse(start) <= d <= parse(end)
 
-
+# 담당: 기능 6(류강현)
 def month_key(value):
     """날짜에서 연-월 문자열을 반환한다. 담당: 기능 6"""
     return parse(value).strftime("%Y-%m")
