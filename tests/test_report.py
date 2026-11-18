@@ -150,5 +150,53 @@ class TableTest(unittest.TestCase):
         self.assertEqual(textfmt.table(["이름"], []), "이름\n----")
 
 
+class BarChartTest(unittest.TestCase):
+    def test_largest_fills_bar_width(self):
+        got = textfmt.bar_chart({"식비": 30000, "교통": 15000}, bar_width=10)
+        lines = got.splitlines()
+        self.assertEqual(lines[0].count("#"), 10)
+        self.assertEqual(lines[1].count("#"), 5)
+
+    def test_value_with_commas_at_end(self):
+        got = textfmt.bar_chart({"식비": 30000, "교통": 15000}, bar_width=10)
+        self.assertEqual(got, "\n".join([
+            "식비  ##########  30,000",
+            "교통  #####       15,000",
+        ]))
+
+    def test_zero_has_no_bar_but_number(self):
+        got = textfmt.bar_chart({"식비": 1000, "미분류": 0}, bar_width=5)
+        zero_line = got.splitlines()[1]
+        self.assertNotIn("#", zero_line)
+        self.assertTrue(zero_line.endswith("0"))
+
+    def test_negative_has_no_bar_but_number(self):
+        got = textfmt.bar_chart({"식비": 1000, "환불": -500}, bar_width=5)
+        negative_line = got.splitlines()[1]
+        self.assertNotIn("#", negative_line)
+        self.assertTrue(negative_line.endswith("-500"))
+
+    def test_small_positive_gets_one_char(self):
+        got = textfmt.bar_chart({"식비": 30000, "기타": 1}, bar_width=10)
+        self.assertEqual(got.splitlines()[1].count("#"), 1)
+
+    def test_all_zero_has_no_bars(self):
+        got = textfmt.bar_chart({"a": 0, "b": 0}, bar_width=5)
+        self.assertNotIn("#", got)
+
+    def test_custom_char(self):
+        got = textfmt.bar_chart({"a": 3, "b": 1}, bar_width=4, char="*")
+        self.assertEqual(got.splitlines()[0].count("*"), 4)
+        self.assertNotIn("#", got)
+
+    def test_korean_names_align(self):
+        got = textfmt.bar_chart({"김": 1000, "김민수": 500}, bar_width=5)
+        starts = {textfmt.width(line.split("#")[0]) for line in got.splitlines()}
+        self.assertEqual(len(starts), 1)
+
+    def test_empty(self):
+        self.assertEqual(textfmt.bar_chart({}), "")
+
+
 if __name__ == "__main__":
     unittest.main()

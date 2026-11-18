@@ -43,6 +43,20 @@ def table(headers, rows, total=None, numeric=None):
     return "\n".join(out)
 
 
+# 담당: 기능 3(류훈태)
 def bar_chart(data, bar_width=30, char="#"):
     """{이름: 값} 을 글자 막대그래프로."""
-    raise NotImplementedError("기능 3 담당이 구현한다")
+    if not data:
+        return ""
+    biggest = max(data.values())
+    name_w = max(width(name) for name in data)
+    value_w = max(len(f"{v:,}") for v in data.values())
+    lines = []
+    for name, value in data.items():
+        if value > 0:
+            length = max(1, value * bar_width // biggest)
+        else:
+            length = 0
+        bar = char * length
+        lines.append(f"{pad(name, name_w)}  {pad(bar, bar_width * width(char))}  {pad(f'{value:,}', value_w, right=True)}")
+    return "\n".join(lines)
