@@ -23,7 +23,32 @@ from ..common.queries import expense_shares, expenses_in, is_locked, member_shar
 def balances(store, start, end):
     """사람마다 낸 돈, 부담할 돈, 이미 보낸·받은 송금, 잔액.
     잔액 = 낸 돈 - 부담할 돈 + 보낸 송금 - 받은 송금. 양수면 받을 돈, 음수면 보낼 돈."""
-    raise NotImplementedError("이 함수를 구현한다")
+    paid = person_paid(store, start, end)      # {이름: 낸 돈}, 삭제 제외
+    owed = member_shares(store, start, end)    # {이름: 부담할 돈}, 삭제 제외
+
+    # 송금은 기간 안 날짜의 것만 센다. 확정 기간 날짜의 송금도 그대로 센다(규격 4-4 1번).
+    sent, received = {}, {}
+    for t in store.data["transfers"]:
+        if dates.in_period(t["date"], start, end):
+            sent[t["from"]] = sent.get(t["from"], 0) + t["amount"]
+            received[t["to"]] = received.get(t["to"], 0) + t["amount"]
+
+    # 명부 순서로, 기간 안에 낸 돈·부담·보낸 송금·받은 송금 중 하나라도 있는 사람만 넣는다.
+    # 잔액이 0이어도 낸 돈이나 부담이 있으면 넣는다. 활동이 전혀 없는 사람은 넣지 않는다.
+    # (person_paid·member_shares 와 같은 방식. 확정 — 김영광, 11/18)
+    rows = {}
+    for m in store.data["members"]:
+        name = m["name"]
+        row = {
+            "paid": paid.get(name, 0),
+            "owed": owed.get(name, 0),
+            "sent": sent.get(name, 0),
+            "received": received.get(name, 0),
+        }
+        if any(row.values()):
+            row["balance"] = row["paid"] - row["owed"] + row["sent"] - row["received"]
+            rows[name] = row
+    return rows
 
 
 def balance_sum(rows):
