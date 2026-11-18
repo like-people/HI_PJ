@@ -15,7 +15,10 @@ EMPTY = {
     "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo"}
     "next_id": 1,
     "locks": [],        # 기능 4: 확정 기간 {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-    "history": []       # 기능 1: 지출 변경 이력
+    "payments": [],     # 기능 5: 회비 입금 {"date", "member", "amount", "memo", "source"}
+    "transfers": [],    # 기능 4: 이미 보낸 송금 {"date": "YYYY-MM-DD", "from", "to", "amount"}
+    "recurring": [],    # 기능 4: 반복 지출 {"id", "day", "payer", "amount", "members", "weights", "memo", "start_month", "last_month"}
+    "history": [],      # 기능 1: 지출 변경 이력
 }
 
 
@@ -71,6 +74,16 @@ class Store:
             "after": copy.deepcopy(after),
         })
 
+
+    def record(self, action, eid, before, after):
+        """지출 변경 전후의 사본을 이력에 추가한다."""
+        self.data["history"].append({
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "action": action,
+            "eid": eid,
+            "before": copy.deepcopy(before),
+            "after": copy.deepcopy(after),
+        })
 
     def new_id(self):
         eid = self.data["next_id"]
