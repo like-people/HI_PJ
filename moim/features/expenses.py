@@ -38,21 +38,59 @@ def list_members(store):
 
 def add_expense(store, date, payer, amount, members, memo="", weights=None, category=None):
     """지출을 추가한다. 돌려주는 값: (지출, 경고 목록)."""
-    raise NotImplementedError("이 함수를 구현한다")
-
-
+    expense = ledger.insert(
+        store, date, payer, amount, members, memo=memo, weights=weights, category=category,
+    )
+    return expense, []
+    
 def list_expenses(store, order="id", include_deleted=False):
-    raise NotImplementedError("이 함수를 구현한다")
+    """지출을 번호순 또는 날짜순으로 돌려준다."""
+    if order not in ("id", "date"):
+        raise ValueError(f"정렬 기준은 id 또는 date여야 합니다: {order}")
+
+    expenses = (
+        expense for expense in store.data["expenses"]
+        if include_deleted or not expense.get("deleted", False)
+    )
+    return sorted(expenses, key=lambda expense: (expense[order], expense["id"]))
 
 
 def edit_expense(store, eid, **changes):
     """지출을 고친다. 바꿀 수 있는 항목: date, payer, amount, members, memo, weights, category."""
-    raise NotImplementedError("이 함수를 구현한다")
+    expense = store.get_expense(eid)
+    if is_locked(store, expense["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 수정할 수 없습니다: {expense['date']}")
+
+    invalid_fields = changes.keys() - {"date", "payer", "amount", "members", "memo", "weights", "category"}
+    if invalid_fields:
+        raise ValueError(f"수정할 수 없는 항목입니다: {', '.join(sorted(invalid_fields))}")
+
+    updated = {**expense, **changes}
+    weights = updated.get("weights")
+    updated["date"], updated["amount"] = ledger.validate(
+        store, updated["date"], updated["payer"], updated["amount"], updated["members"], weights,
+    )
+    if "members" in changes:
+        updated["members"] = list(updated["members"])
+    if "weights" in changes and weights is not None:
+        updated["weights"] = weights.copy()
+
+    store.record("edit", expense["id"], expense, updated)
+    expense.update(updated)
+    return expense
 
 
 def delete_expense(store, eid):
-    raise NotImplementedError("이 함수를 구현한다")
+    """지출에 삭제 표시를 하고 변경 이력을 기록한다."""
+    expense = store.get_expense(eid)
+    if is_locked(store, expense["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 삭제할 수 없습니다: {expense['date']}")
 
+    if not expense.get("deleted", False):
+        updated = {**expense, "deleted": True}
+        store.record("delete", expense["id"], expense, updated)
+        expense["deleted"] = True
+    return expense
 
 def restore_expense(store, eid):
     raise NotImplementedError("이 함수를 구현한다")
