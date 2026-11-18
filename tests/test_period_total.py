@@ -1,5 +1,7 @@
 """기능 6: 기간 지출 합계 테스트"""
 
+import unittest
+
 from helpers import StoreCase
 from moim.common.queries import period_total
 
@@ -50,5 +52,4 @@ class PeriodTotalTests(StoreCase):
 
 
 if __name__ == "__main__":
-    import unittest
     unittest.main()
