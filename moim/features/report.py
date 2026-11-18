@@ -17,13 +17,24 @@ from ..common.queries import category_totals, expenses_in, period_total, person_
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
 
+# 담당: 기능 3(류훈태)
 def monthly_totals(store, start_month, end_month):
     """{'YYYY-MM': 합계}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    totals = {}
+    for year, month in dates.months_between(dates.parse_month(start_month), dates.parse_month(end_month)):
+        first, last = dates.month_range(year, month)
+        totals[f"{year:04d}-{month:02d}"] = sum(e["amount"] for e in expenses_in(store, first, last))
+    return totals
 
 
+# 담당: 기능 3(류훈태)
 def period_summary(store, start, end):
-    raise NotImplementedError("이 함수를 구현한다")
+    """기간 보고: {"total": 합계, "by_category": {분류: 금액}, "by_person": {이름: 낸 돈}}"""
+    return {
+        "total": sum(e["amount"] for e in expenses_in(store, start, end)),
+        "by_category": {name: v["amount"] for name, v in category_totals(store, start, end).items()},
+        "by_person": person_paid(store, start, end),
+    }
 
 
 def month_over_month(store, month):
