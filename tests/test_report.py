@@ -66,5 +66,47 @@ class ExpensesIn(StoreCase):
         self.assertEqual(queries.expenses_in(self.store, "2026-11-01", "2026-11-30"), [])
 
 
+class PersonPaid(StoreCase):
+    def put(self, eid, date, payer, amount, deleted=None):
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(NAMES), "category": None, "memo": ""}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def paid(self, start="2026-11-10", end="2026-11-20"):
+        return queries.person_paid(self.store, start, end)
+
+    def test_sums_by_payer(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", lee, 6000)
+        self.put(2, "2026-11-13", kim, 9000)
+        self.put(3, "2026-11-14", kim, 1000)
+        self.assertEqual(self.paid(), {kim: 10000, lee: 6000})
+
+    def test_member_order_and_only_payers(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", park, 3000)
+        self.put(2, "2026-11-13", kim, 2000)
+        self.assertEqual(list(self.paid()), [kim, park])
+
+    def test_skips_deleted(self):
+        kim = NAMES[0]
+        self.put(1, "2026-11-12", kim, 5000, deleted=True)
+        self.put(2, "2026-11-13", kim, 1000)
+        self.assertEqual(self.paid(), {kim: 1000})
+
+    def test_period_includes_start_and_end(self):
+        kim = NAMES[0]
+        self.put(1, "2026-10-31", kim, 1)
+        self.put(2, "2026-11-01", kim, 10)
+        self.put(3, "2026-11-30", kim, 100)
+        self.put(4, "2026-12-01", kim, 1000)
+        self.assertEqual(self.paid("2026-11-01", "2026-11-30"), {kim: 110})
+
+    def test_empty(self):
+        self.assertEqual(self.paid(), {})
+
+
 if __name__ == "__main__":
     unittest.main()

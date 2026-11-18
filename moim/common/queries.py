@@ -4,6 +4,7 @@ from . import dates, money  # noqa: F401
 from .rules import UNCATEGORIZED  # noqa: F401
 
 
+# 담당: 기능 3(류훈태) 
 def expenses_in(store, start, end, include_deleted=False):
     """기간 안의 지출 목록(시작일·끝일 포함). 담당: 기능 3"""
     found = [
@@ -39,9 +40,14 @@ def category_totals(store, start, end):
     return dict(ordered)
 
 
+# 담당: 기능 3(류훈태)
 def person_paid(store, start, end):
     """사람마다 낸 돈 합계. 담당: 기능 3"""
-    raise NotImplementedError("기능 3 담당이 구현한다")
+    paid = {}
+    for e in expenses_in(store, start, end):
+        paid[e["payer"]] = paid.get(e["payer"], 0) + e["amount"]
+    names = [m["name"] for m in store.data["members"]]
+    return {name: paid[name] for name in names if name in paid}
 
 
 def is_member_active(store, name, on):
