@@ -1,10 +1,8 @@
 """month_key 함수 테스트."""
 
 
-
 import datetime as dt
 import unittest
-
 
 from moim.common.dates import month_key
 
