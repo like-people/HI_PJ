@@ -8,12 +8,14 @@ save·backups·recover 는 팀 공동 작업 "자료 파일 손상 대응" 담�
 import copy
 import json
 import os
+from datetime import datetime
 
 EMPTY = {
     "members": [],      # {"name", "joined", "left"}
     "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo"}
     "next_id": 1,
     "locks": [],        # 기능 4: 확정 기간 {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
+    "history": []       # 기능 1: 지출 변경 이력
 }
 
 
@@ -58,6 +60,17 @@ class Store:
     def recover(self):
         """깨진 파일을 옆에 남기고 마지막 정상 백업을 불러온다. 불러온 백업 경로를 recovered_from 에 둔다."""
         raise NotImplementedError("자료 파일 손상 대응 담당이 구현한다")
+
+    def record(self, action, eid, before, after):
+        """지출 변경 전후의 사본을 이력에 추가한다."""
+        self.data["history"].append({
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "action": action,
+            "eid": eid,
+            "before": copy.deepcopy(before),
+            "after": copy.deepcopy(after),
+        })
+
 
     def new_id(self):
         eid = self.data["next_id"]
