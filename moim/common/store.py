@@ -213,17 +213,6 @@ class Store:
             "after": copy.deepcopy(after),
         })
 
-
-    def record(self, action, eid, before, after):
-        """지출 변경 전후의 사본을 이력에 추가한다."""
-        self.data["history"].append({
-            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "action": action,
-            "eid": eid,
-            "before": copy.deepcopy(before),
-            "after": copy.deepcopy(after),
-        })
-
     def new_id(self):
         eid = self.data["next_id"]
         self.data["next_id"] += 1
