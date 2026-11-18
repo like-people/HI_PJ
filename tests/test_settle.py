@@ -171,6 +171,12 @@ class MemberShares(StoreCase):
         self.put(1, "2026-11-10", kim, 4000, [kim, park])
         self.assertNotIn(lee, self.shares())
 
+    def test_zero_share_excluded(self):
+        # 1원을 셋이 나누면 1원을 맡은 사람만 남는다(규격 4-1 "부담이 있는 사람만")
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", kim, 1, NAMES)
+        self.assertEqual(self.shares(), {kim: 1})
+
     def test_member_order(self):
         # 지출에 나온 순서(박 → 김)와 상관없이 명부 순서(김 → 박)
         kim, lee, park = NAMES

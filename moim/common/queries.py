@@ -95,7 +95,7 @@ def member_shares(store, start, end):
         for name, share in expense_shares(e).items():
             owed[name] = owed.get(name, 0) + share
     names = [m["name"] for m in store.data["members"]]
-    return {name: owed[name] for name in names if name in owed}
+    return {name: owed[name] for name in names if owed.get(name)}
 
 
 # 담당: 기능 4(김영광)
