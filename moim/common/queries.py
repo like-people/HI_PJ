@@ -16,12 +16,21 @@ def period_total(store, start, end):
 
 def category_of(e):
     """지출의 분류 이름. 분류가 없으면 규약의 "미분류". 담당: 기능 2"""
-    raise NotImplementedError("기능 2 담당이 구현한다")
+    category = e.get("category")
+    if category is None or category == "":
+        return UNCATEGORIZED
+    return category
 
 
 def category_totals(store, start, end):
     """분류별 건수와 금액. {분류: {"count": n, "amount": 원}} 담당: 기능 2"""
-    raise NotImplementedError("기능 2 담당이 구현한다")
+    totals = {}
+    for e in expenses_in(store, start, end):
+        item = totals.setdefault(category_of(e), {"count": 0, "amount": 0})
+        item["count"] += 1
+        item["amount"] += e["amount"]
+    ordered = sorted(totals.items(), key=lambda kv: (-kv[1]["amount"], kv[0]))
+    return dict(ordered)
 
 
 def person_paid(store, start, end):
