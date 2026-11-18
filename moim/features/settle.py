@@ -33,7 +33,21 @@ def balance_sum(rows):
 
 def minimal_transfers(rows):
     """송금 횟수를 줄인 '누가 누구에게 얼마' 목록. 가장 많이 보낼 사람이 가장 많이 받을 사람에게 보내는 방식."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 남은 금액은 따로 계산한다(rows 는 바꾸지 않음). 목록은 rows 순서(명부 순서)를 유지한다.
+    senders = [[name, -r["balance"]] for name, r in rows.items() if r["balance"] < 0]
+    receivers = [[name, r["balance"]] for name, r in rows.items() if r["balance"] > 0]
+    transfers = []
+    while senders and receivers:
+        # max 는 같은 값이면 앞의 것을 고르므로, 금액이 같으면 명부 순서가 먼저다.
+        frm = max(senders, key=lambda s: s[1])
+        to = max(receivers, key=lambda r: r[1])
+        amount = min(frm[1], to[1])
+        transfers.append((frm[0], to[0], amount))
+        frm[1] -= amount
+        to[1] -= amount
+        senders = [s for s in senders if s[1] > 0]
+        receivers = [r for r in receivers if r[1] > 0]
+    return transfers
 
 
 def record_transfer(store, date, frm, to, amount):
