@@ -220,7 +220,7 @@ class ReportTotals(StoreCase):
 
     def test_monthly_range_includes_empty_month(self):
         self.fill()
-             self.assertEqual(report.monthly_totals(self.store, "2026-10", "2026-12"),
+        self.assertEqual(report.monthly_totals(self.store, "2026-10", "2026-12"),
                          {"2026-10": 3000, "2026-11": 15000, "2026-12": 0})
 
     def test_monthly_over_year_end(self):
