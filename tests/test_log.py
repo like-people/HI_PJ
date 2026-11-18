@@ -61,5 +61,31 @@ class LoggerTests(unittest.TestCase):
         self.assertIs(logger1, logger2)
 
 
+    def test_different_log_dir_replaces_previous_handler(self):
+        first_dir = os.path.join(self.log_dir, "first")
+        second_dir = os.path.join(self.log_dir, "second")
+
+        logger = get_logger(first_dir)
+        logger.info("first path record")
+
+        get_logger(second_dir)
+        logger.info("second path record")
+
+        filename = datetime.now().strftime("%Y-%m-%d") + ".log"
+        first_path = os.path.join(first_dir, filename)
+        second_path = os.path.join(second_dir, filename)
+
+        with open(first_path, encoding="utf-8") as f:
+            first_content = f.read()
+
+        with open(second_path, encoding="utf-8") as f:
+            second_content = f.read()
+
+        self.assertIn("first path record", first_content)
+        self.assertNotIn("second path record", first_content)
+        self.assertIn("second path record", second_content)
+
+
+
 if __name__ == "__main__":
     unittest.main()

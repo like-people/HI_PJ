@@ -17,10 +17,12 @@ def get_logger(log_dir):
     filename = datetime.now().strftime("%Y-%m-%d") + ".log"
     file_path = (log_path / filename).resolve()
 
-    for handler in logger.handlers:
+    for handler in logger.handlers[:]:
         if getattr(handler, "_moim_file_handler", False):
             if Path(handler.baseFilename) == file_path:
                 return logger
+            logger.removeHandler(handler)
+            handler.close()
 
     handler = logging.FileHandler(file_path, encoding="utf-8")
     handler._moim_file_handler = True
