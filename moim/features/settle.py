@@ -28,7 +28,7 @@ def balances(store, start, end):
 
 def balance_sum(rows):
     """모든 사람 잔액의 합. 규칙대로라면 항상 0이다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    return sum(r["balance"] for r in rows.values())
 
 
 def minimal_transfers(rows):

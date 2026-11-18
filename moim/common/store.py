@@ -8,14 +8,20 @@ save·backups·recover 는 팀 공동 작업 "자료 파일 손상 대응" 담�
 import copy
 import json
 import os
+import re
+import shutil
+import tempfile
 from datetime import datetime
 
 EMPTY = {
     "members": [],      # {"name", "joined", "left"}
-    "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo"}
+    "expenses": [],     # {"id", "date", "payer", "amount", "members", "category", "memo", "weights"(기능 4)}
     "next_id": 1,
     "locks": [],        # 기능 4: 확정 기간 {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}
-    "history": []       # 기능 1: 지출 변경 이력
+    "payments": [],     # 기능 5: 회비 입금 {"date", "member", "amount", "memo", "source"}
+    "transfers": [],    # 기능 4: 이미 보낸 송금 {"date": "YYYY-MM-DD", "from", "to", "amount"}
+    "recurring": [],    # 기능 4: 반복 지출 {"id", "day", "payer", "amount", "members", "weights", "memo", "start_month", "last_month"}
+    "history": [],      # 기능 1: 지출 변경 이력
 }
 
 
@@ -48,18 +54,154 @@ class Store:
         for key, value in EMPTY.items():
             data.setdefault(key, copy.deepcopy(value))
 
+    # 담당: 자료 파일 손상 대응(이정배)
     def save(self):
-        """지금은 그냥 덮어쓴다. 저장 도중 멈추면 파일이 깨질 수 있다(자료 파일 손상 대응 담당이 고친다)."""
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
+        """임시 파일에 저장하고, 직전 정상 자료를 백업한 뒤 원본을 교체한다."""
+        if isinstance(self.keep, bool) or not isinstance(self.keep, int) or self.keep < 1:
+            raise ValueError("백업 보관 개수는 1 이상의 정수여야 합니다")
 
+        self._check_shape(self.data)
+        directory = os.path.dirname(os.path.abspath(self.path))
+        temp_path = None
+
+        try:
+            # 원본과 같은 폴더에 써야 os.replace로 안전하게 교체할 수 있다.
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=directory,
+                prefix=".moim-",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                temp_path = f.name
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+
+            if os.path.exists(self.path):
+                # 손상된 원본으로 정상 백업을 밀어내지 않도록 먼저 검사한다.
+                with open(self.path, encoding="utf-8") as f:
+                    previous = json.load(f)
+                self._check_shape(previous)
+
+                os.makedirs(self.backup_dir, exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                prefix = f"{os.path.basename(self.path)}-{stamp}-"
+                backup_path = None
+
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb",
+                        dir=self.backup_dir,
+                        prefix=prefix,
+                        suffix=".json",
+                        delete=False,
+                    ) as backup:
+                        backup_path = backup.name
+                        with open(self.path, "rb") as source:
+                            shutil.copyfileobj(source, backup)
+                        backup.flush()
+                        os.fsync(backup.fileno())
+                except BaseException:
+                    if backup_path is not None:
+                        os.remove(backup_path)
+                    raise
+
+            os.replace(temp_path, self.path)
+            temp_path = None
+
+            # 원본 교체가 성공한 뒤 오래된 백업을 정리한다.
+            for path in self.backups()[:-self.keep]:
+                os.remove(path)
+        finally:
+            if temp_path is not None and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    # 담당: 자료 파일 손상 대응(이정배)
     def backups(self):
-        """백업 파일 목록(오래된 것부터)."""
-        raise NotImplementedError("자료 파일 손상 대응 담당이 구현한다")
+        """이 자료 파일의 백업 경로를 오래된 순서로 반환한다."""
+        if not os.path.isdir(self.backup_dir):
+            return []
 
+        filename = re.escape(os.path.basename(self.path))
+        pattern = re.compile(
+            rf"{filename}-\d{{8}}-\d{{6}}-\d{{6}}(?:-[^.]+)?\.json"
+        )
+
+        return [
+            os.path.join(self.backup_dir, name)
+            for name in sorted(os.listdir(self.backup_dir))
+            if pattern.fullmatch(name)
+            and os.path.isfile(os.path.join(self.backup_dir, name))
+        ]
+
+    # 담당: 자료 파일 손상 대응(이정배)
     def recover(self):
-        """깨진 파일을 옆에 남기고 마지막 정상 백업을 불러온다. 불러온 백업 경로를 recovered_from 에 둔다."""
-        raise NotImplementedError("자료 파일 손상 대응 담당이 구현한다")
+        """손상 원본을 보존하고 최신 정상 백업으로 복구한 뒤 자신을 반환한다."""
+        restored = None
+        recovered_path = None
+
+        for path in reversed(self.backups()):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                self._check_shape(data)
+            except (OSError, ValueError):
+                continue
+            restored = data
+            recovered_path = path
+            break
+
+        if recovered_path is None:
+            raise ValueError("복구할 수 있는 정상 백업이 없습니다")
+
+        directory = os.path.dirname(os.path.abspath(self.path))
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=directory,
+                prefix=".moim-recover-",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                temp_path = f.name
+                json.dump(restored, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # 손상 원본을 옆에 별도 보관하고 백업 목록과 구분한다.
+            if os.path.exists(self.path):
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+                broken_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb",
+                        dir=directory,
+                        prefix=f"{os.path.basename(self.path)}.broken-{stamp}-",
+                        delete=False,
+                    ) as broken:
+                        broken_path = broken.name
+                        with open(self.path, "rb") as source:
+                            shutil.copyfileobj(source, broken)
+                        broken.flush()
+                        os.fsync(broken.fileno())
+                except BaseException:
+                    if broken_path is not None:
+                        os.remove(broken_path)
+                    raise
+
+            os.replace(temp_path, self.path)
+            temp_path = None
+        finally:
+            if temp_path is not None and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        self.data = restored
+        self.recovered_from = recovered_path
+        return self
 
     def record(self, action, eid, before, after):
         """지출 변경 전후의 사본을 이력에 추가한다."""
@@ -71,6 +213,16 @@ class Store:
             "after": copy.deepcopy(after),
         })
 
+
+    def record(self, action, eid, before, after):
+        """지출 변경 전후의 사본을 이력에 추가한다."""
+        self.data["history"].append({
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "action": action,
+            "eid": eid,
+            "before": copy.deepcopy(before),
+            "after": copy.deepcopy(after),
+        })
 
     def new_id(self):
         eid = self.data["next_id"]
