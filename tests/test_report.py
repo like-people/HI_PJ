@@ -8,7 +8,7 @@ import unittest
 
 from helpers import NAMES, StoreCase
 
-from moim.common import queries
+from moim.common import queries, textfmt
 
 KIM = NAMES[0]
 
@@ -106,6 +106,48 @@ class PersonPaid(StoreCase):
 
     def test_empty(self):
         self.assertEqual(self.paid(), {})
+
+
+class TableTest(unittest.TestCase):
+    HEAD = ["번호", "이름", "금액"]
+
+    def test_commas_and_right_align(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500], [2, "이서연", 12000]], numeric={2})
+        want = "\n".join([
+            "번호  이름      금액",
+            "--------------------",
+            "1     김민수   1,500",
+            "2     이서연  12,000",
+        ])
+        self.assertEqual(got, want)
+
+    def test_total_row_is_whole_line(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500], [2, "이서연", 12000]],
+                            total=["합계", "", 13500], numeric={2})
+        self.assertEqual(got.splitlines()[-2], "-" * 20)
+        self.assertEqual(got.splitlines()[-1], "합계          13,500")
+
+    def test_no_total_line_when_none(self):
+        got = textfmt.table(self.HEAD, [[1, "김민수", 1500]], numeric={2})
+        self.assertEqual(len(got.splitlines()), 3)
+
+    def test_non_numeric_column_keeps_digits(self):
+        got = textfmt.table(["번호", "금액"], [[1234, 5000]], numeric={1})
+        self.assertIn("1234", got)
+        self.assertIn("5,000", got)
+        self.assertNotIn("1,234", got)
+
+    def test_negative_number(self):
+        got = textfmt.table(["번호", "금액"], [[1, -5000]], numeric={1})
+        self.assertIn("-5,000", got)
+
+    def test_korean_width_aligns(self):
+        got = textfmt.table(["이름", "금액"], [["김", 1], ["김민수", 22]], numeric={1})
+        widths = {textfmt.width(line) for line in got.splitlines() if not line.startswith("-")}
+        self.assertEqual(len(widths), 1)
+
+    def test_empty_rows(self):
+        self.assertEqual(textfmt.table(["이름"], []), "이름\n----")
 
 
 if __name__ == "__main__":
