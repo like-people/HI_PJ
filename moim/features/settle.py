@@ -16,6 +16,8 @@
 """
 
 import copy
+from decimal import DecimalException
+
 from ..common import dates, ledger, money
 from ..common.queries import expense_shares, expenses_in, is_locked, member_shares, person_paid
 
@@ -38,7 +40,22 @@ def minimal_transfers(rows):
 
 def record_transfer(store, date, frm, to, amount):
     """이미 보낸 송금을 기록한다(부분 정산)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 확정 기간 날짜의 송금도 허용한다(규격 4-4 1번). 확정은 지출만 잠근다.
+    day = dates.fmt(date)
+    try:
+        won = money.to_won(amount)
+    except (ValueError, DecimalException, OverflowError):
+        raise ValueError(f"금액 형식이 잘못되었습니다: {amount}") from None
+    if won < 1:
+        raise ValueError("송금액은 1원 이상이어야 합니다")
+    for name in (frm, to):
+        if store.member(name) is None:
+            raise ValueError(f"명부에 없는 사람입니다: {name}")
+    if frm == to:
+        raise ValueError("보내는 사람과 받는 사람이 같습니다")
+    transfer = {"date": day, "from": frm, "to": to, "amount": won}
+    store.data["transfers"].append(transfer)
+    return transfer
 
 
 def lock_period(store, start, end):
