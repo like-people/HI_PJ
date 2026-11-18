@@ -6,6 +6,7 @@ from helpers import StoreCase
 
 from moim.common import money, queries
 from moim.common.store import Store
+from moim.features import settle
 
 
 class IsLocked(StoreCase):
@@ -104,6 +105,33 @@ class SettleDataItems(StoreCase):
         data = Store(path).load().data
         self.assertEqual(data["transfers"], [])
         self.assertEqual(data["recurring"], [])
+
+
+class BalanceSum(unittest.TestCase):
+    @staticmethod
+    def row(paid, owed, sent=0, received=0):
+        """balances 한 사람 칸. balance = paid - owed + sent - received (규격 4-3)."""
+        return {"paid": paid, "owed": owed, "sent": sent, "received": received,
+                "balance": paid - owed + sent - received}
+
+    def test_zero_when_settled(self):
+        # 6000원을 세 사람이 나누고 가가 냄: 가 +4000, 나 -2000, 다 -2000
+        rows = {"가": self.row(6000, 2000), "나": self.row(0, 2000), "다": self.row(0, 2000)}
+        self.assertEqual(settle.balance_sum(rows), 0)
+
+    def test_zero_with_transfer(self):
+        # 나가 가에게 2000원을 보낸 뒤에도 합은 0
+        rows = {"가": self.row(6000, 2000, received=2000), "나": self.row(0, 2000, sent=2000),
+                "다": self.row(0, 2000)}
+        self.assertEqual(settle.balance_sum(rows), 0)
+
+    def test_not_zero(self):
+        # 합이 0이 아니면 그 값을 그대로 돌려준다(정산 확정 거부 판단에 쓰임)
+        rows = {"가": self.row(4000, 0), "나": self.row(0, 1000)}
+        self.assertEqual(settle.balance_sum(rows), 3000)
+
+    def test_empty(self):
+        self.assertEqual(settle.balance_sum({}), 0)
 
 
 if __name__ == "__main__":
