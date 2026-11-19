@@ -62,8 +62,6 @@ def file_total(path):
                 continue
 
             amount = row.get("amount", "").strip()
-            if not amount:
-                continue
 
             count += 1
             total += money.to_won(amount)
