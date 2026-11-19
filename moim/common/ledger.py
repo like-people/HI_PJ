@@ -9,7 +9,7 @@ def validate(store, date, payer, amount, members, weights=None):
     담당: 기능 1"""
     raise NotImplementedError("기능 1 담당이 구현한다")
 
-
+# 담당: 기능 6(류강현)
 def duplicates(store, date, payer, amount, exclude_id=None):
     """같은 날짜·금액·사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
     target_date = dates.fmt(date)
