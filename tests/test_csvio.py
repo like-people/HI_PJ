@@ -80,7 +80,7 @@ class TestReadCsvRows(unittest.TestCase):
 
             _, rows = read_csv_rows(path)
 
-            self.assertEqual(rows[0][0], 3)
+            self.assertEqual(rows[0][0], 2)
             self.assertEqual(rows[1][0], 4)
 
 
