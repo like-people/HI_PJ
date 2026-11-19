@@ -89,12 +89,26 @@ def week_totals(store, start, end):
     return totals
 
 
+# 담당: 기능 3(류훈태)
 def top_expenses(store, start, end, n=5):
-    raise NotImplementedError("이 함수를 구현한다")
+    """기간에서 금액이 큰 지출 n 건(지출 dict 그대로). 금액 큰 순, 같으면 날짜·번호 순. 삭제된 지출은 뺀다."""
+    if n <= 0:
+        return []
+    ranked = sorted(expenses_in(store, start, end), key=lambda e: (-e["amount"], e["date"], e["id"]))
+    return ranked[:n]
 
 
+# 담당: 기능 3(류훈태)
 def biggest_day(store, start, end):
-    raise NotImplementedError("이 함수를 구현한다")
+    """지출 합계가 가장 큰 날. 돌려주는 값: (날짜 'YYYY-MM-DD', 그날 합계). 지출이 없으면 None. 합계가 같으면 빠른 날짜."""
+    by_day = {}
+    for e in expenses_in(store, start, end):
+        day = dates.fmt(e["date"])
+        by_day[day] = by_day.get(day, 0) + e["amount"]
+    if not by_day:
+        return None
+    day = min(by_day, key=lambda d: (-by_day[d], d))
+    return day, by_day[day]
 
 
 def month_report(store, month):
@@ -106,6 +120,16 @@ def save_report(text, path):
     raise NotImplementedError("이 함수를 구현한다")
 
 
+# 담당: 기능 3(류훈태)
 def search(store, start=None, end=None, person=None, min_amount=None, max_amount=None, word=None):
     """지출 검색. 기간, 사람(낸 사람이거나 참여자), 금액 범위, 메모 낱말로 찾는다. 삭제된 지출은 빼고 날짜순."""
-    raise NotImplementedError("이 함수를 구현한다")
+    found = expenses_in(store, start or "0001-01-01", end or "9999-12-31")
+    if person is not None:
+        found = [e for e in found if e["payer"] == person or person in e["members"]]
+    if min_amount is not None:
+        found = [e for e in found if e["amount"] >= money.to_won(min_amount)]
+    if max_amount is not None:
+        found = [e for e in found if e["amount"] <= money.to_won(max_amount)]
+    if word:
+        found = [e for e in found if word in (e.get("memo") or "")]
+    return found
