@@ -61,6 +61,23 @@ class LoggerTests(unittest.TestCase):
         self.assertIs(logger1, logger2)
 
 
+    def test_none_log_dir_does_not_create_file_handler(self):
+        logger = get_logger(self.log_dir)
+        self.assertTrue(
+            any(getattr(handler, "_moim_file_handler", False)
+                for handler in logger.handlers)
+        )
+
+        logger = get_logger(None)
+
+        self.assertFalse(
+            any(getattr(handler, "_moim_file_handler", False)
+                for handler in logger.handlers)
+        )
+
+        logger.info("기록하지 않을 메시지")
+
+
     def test_different_log_dir_replaces_previous_handler(self):
         first_dir = os.path.join(self.log_dir, "first")
         second_dir = os.path.join(self.log_dir, "second")

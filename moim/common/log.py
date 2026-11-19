@@ -11,6 +11,13 @@ def get_logger(log_dir):
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
+    if log_dir is None:
+        for handler in logger.handlers[:]:
+            if getattr(handler, "_moim_file_handler", False):
+                logger.removeHandler(handler)
+                handler.close()
+        return logger
+
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
 
