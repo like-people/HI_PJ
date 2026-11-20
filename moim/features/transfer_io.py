@@ -13,6 +13,9 @@
 import csv
 import copy
 import json
+import os
+import tempfile
+
 from ..common import dates, ledger, money
 from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
 from ..common.queries import active_members, expenses_in
@@ -28,8 +31,45 @@ def export_json(store, path, start=None, end=None, category=None):
 
 
 def file_total(path):
-    """내보낸 파일의 금액 합계와 건수."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """내보낸 파일의 금액 합계와 건수를 반환한다: (건수, 합계)."""
+    if str(path).lower().endswith(".json"):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            rows = data.get("expenses", [])
+        elif isinstance(data, list):
+            rows = data
+        else:
+            raise ValueError("JSON 파일 형식이 올바르지 않습니다")
+
+        rows = [
+            row for row in rows
+            if not row.get("deleted", False)
+        ]
+
+        total = sum(money.to_won(row["amount"]) for row in rows)
+        return len(rows), total
+
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        if reader.fieldnames is None or "amount" not in reader.fieldnames:
+            raise ValueError("CSV 파일에 amount 열이 없습니다")
+
+        count = 0
+        total = 0
+
+        for row in reader:
+            if not row:
+                continue
+
+            amount = row.get("amount", "").strip()
+
+            count += 1
+            total += money.to_won(amount)
+
+    return count, total
 
 
 def verify_export(store, path, start=None, end=None, category=None):
@@ -49,11 +89,51 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
 
 def backup_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """현재 모임 자료 전체를 JSON 백업 파일로 저장한다."""
+
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=directory,
+            prefix=".moim-backup-",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            temp_path = f.name
+            json.dump(store.data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(temp_path, path)
+        temp_path = None
+
+    finally:
+        if temp_path is not None and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 def restore_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """JSON 백업 파일을 읽어 현재 모임 자료 전체를 복원한다."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError("백업 파일 형식이 올바르지 않습니다")
+
+    # 기존 Store 자료 구조 규칙으로 검사한다.
+    store._check_shape(data)
+
+    # 정상적으로 검사된 자료만 현재 저장소에 반영한다.
+    store.data = copy.deepcopy(data)
+
+    return store
+
 
 
 def merge(store, other_path):
