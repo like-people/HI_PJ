@@ -1,10 +1,10 @@
 """기능 5. 예산·회비. 담당: 이정배.
 
 이 기능을 구현하려면 아래 공통 함수를 이 기능 담당자가 채운다(공통 모듈 병합 요청으로).
-  - common/queries.py is_member_active — 그날 회원인가(공용: 기능 1의 지출 검사)
-  - common/queries.py active_members — 그날 회원 목록
-  - common/dates.py months_between — 두 달 사이의 달 목록(공용: 기능 3)
-  - 은행 거래내역 가져오기는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
+  - common/queries.py is_member_active - 그날 회원인가(공용: 기능 1의 지출 검사)
+  - common/queries.py active_members - 그날 회원 목록
+  - common/dates.py months_between - 두 달 사이의 달 목록(공용: 기능 3)
+  - 은행 거래내역 가져오는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
 
 이 기능에 필요한 자료 항목은 common/store.py 의 EMPTY 에 이 기능 담당자가 추가한다.
   - 회비 입금(payments 목록)
@@ -60,7 +60,6 @@ def treasury_balance(store, until=None):
     raise NotImplementedError("이 함수를 구현한다")
 
 
-
 def unpaid(store, cfg, month):
     """그달 회비 미납자. 그달 1일 또는 말일에 회원인 사람이 대상.
     [(이름, 낸 회비, 모자란 금액)]
@@ -114,19 +113,56 @@ def dues_deduction(store, cfg, month):
 
 def budget_table(store, cfg, month):
     """예산 대비 실제 표 자료. [(분류, 예산, 실제, 차이)] 마지막 줄은 전체."""
-    raise NotImplementedError("이 함수를 구현한다")
+    year, mon = dates.parse_month(month)
+    start, end = dates.month_range(year, mon)
+
+    budget_cfg = cfg.get("budget", {})
+    by_category = budget_cfg.get("by_category") or {}
+    monthly = budget_cfg.get("monthly")
+
+    if monthly is not None and (
+        isinstance(monthly, bool) or not isinstance(monthly, int) or monthly < 0
+    ):
+        raise ValueError("월 예산은 0 이상의 정수여야 합니다")
+
+    totals = category_totals(store, start, end)
+    rows = []
+
+    for category, limit in by_category.items():
+        spent = totals.get(category, {}).get("amount", 0)
+        if limit is None:
+            rows.append((category, None, spent, None))
+            continue
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+            raise ValueError(f"분류 예산은 0 이상의 정수여야 합니다: {category}")
+        rows.append((category, limit, spent, limit - spent))
+
+    for category, info in totals.items():
+        if category in by_category:
+            continue
+        spent = info["amount"]
+        rows.append((category, 0, spent, -spent))
+
+    total_spent = period_total(store, start, end)
+    if monthly is None:
+        rows.append(("전체", None, total_spent, None))
+    else:
+        rows.append(("전체", monthly, total_spent, monthly - total_spent))
+
+    return rows
 
 
 def suggest_budget(store, month):
     """다음 달 예산 제안: 그달을 포함한 최근 3개월 지출 평균(천 원 단위 올림)."""
     raise NotImplementedError("이 함수를 구현한다")
 
+
 BANK_COLUMNS = ["거래일자", "거래시각", "적요", "출금액", "입금액", "잔액"]
 
 
 def import_bank(store, path, treasurer):
     """가상 은행(Tarnwick 제휴 은행) 거래내역을 가져온다(docs/은행거래내역형식.md).
-    출금 → 총무가 낸 지출(참여자: 그날의 회원 전원), 입금 → 적요의 이름으로 회비 입금.
+    출금 -> 총무가 낸 지출(참여자: 그날의 회원 전원), 입금 -> 적요의 이름으로 회비 입금.
     이미 들어간 거래(같은 날·같은 금액·같은 적요의 출금, 같은 날·같은 사람·같은 금액의 은행 입금)와
     파일 안에서 거래일자·거래시각·적요·금액·잔액이 모두 같은 줄은 중복으로 보고 건너뛴다.
     돌려주는 값: {"expenses": [번호], "payments": 건수, "duplicates": [줄 번호], "errors": [(줄 번호, 오류)]}"""
