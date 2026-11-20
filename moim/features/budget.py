@@ -35,16 +35,18 @@ def category_status(store, cfg, month):
     if not by_category:
         return {}
 
-    warn_ratio = cfg.get("warn_ratio", 0.8)
-    if (
-        isinstance(warn_ratio, bool)
-        or not isinstance(warn_ratio, (int, float))
-        or not (0 <= warn_ratio <= 1)
-    ):
-        raise ValueError("경고 비율(warn_ratio)은 0 이상 1 이하의 숫자여야 합니다")
+    ratio = None
+    if any(limit is not None for limit in by_category.values()):
+        warn_ratio = cfg.get("warn_ratio", 0.8)
+        if (
+            isinstance(warn_ratio, bool)
+            or not isinstance(warn_ratio, (int, float))
+            or not (0 <= warn_ratio <= 1)
+        ):
+            raise ValueError("경고 비율(warn_ratio)은 0 이상 1 이하의 숫자여야 합니다")
+        ratio = Decimal(str(warn_ratio))
 
     totals = category_totals(store, start, end)
-    ratio = Decimal(str(warn_ratio))
     result = {}
 
     for category, limit in by_category.items():

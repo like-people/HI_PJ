@@ -92,6 +92,20 @@ class TestCategoryStatus(StoreCase):
             "warn": False,
         })
 
+    def test_all_none_budgets_skip_warn_ratio_validation(self):
+        self.cfg["budget"]["by_category"] = {"식비": None}
+        self.cfg["warn_ratio"] = "invalid"
+        self._add_expense("2026-11-10", 10000, category="식비")
+
+        result = budget.category_status(self.store, self.cfg, "2026-11")
+        self.assertEqual(result["식비"], {
+            "budget": None,
+            "spent": 10000,
+            "remaining": None,
+            "over": False,
+            "warn": False,
+        })
+
     def test_invalid_category_budget_or_warn_ratio_raises(self):
         for bad in (-100, True, "50000"):
             with self.subTest(limit=bad):
