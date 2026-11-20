@@ -13,6 +13,9 @@
 import csv
 import copy
 import json
+import os
+import tempfile
+
 from ..common import dates, ledger, money
 from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
 from ..common.queries import active_members, expenses_in
@@ -87,8 +90,6 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
 def backup_all(store, path):
     """현재 모임 자료 전체를 JSON 백업 파일로 저장한다."""
-    import os
-    import tempfile
 
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
