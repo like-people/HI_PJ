@@ -16,6 +16,10 @@ def get_logger(log_dir):
             if getattr(handler, "_moim_file_handler", False):
                 logger.removeHandler(handler)
                 handler.close()
+
+        if not any(isinstance(handler, logging.NullHandler) for handler in logger.handlers):
+            logger.addHandler(logging.NullHandler())
+
         return logger
 
     log_path = Path(log_dir)

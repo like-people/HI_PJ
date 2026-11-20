@@ -4,6 +4,8 @@ import shutil
 import tempfile
 import unittest
 from datetime import datetime
+import io
+from contextlib import redirect_stderr
 
 from moim.common.log import get_logger
 
@@ -63,19 +65,20 @@ class LoggerTests(unittest.TestCase):
 
     def test_none_log_dir_does_not_create_file_handler(self):
         logger = get_logger(self.log_dir)
-        self.assertTrue(
-            any(getattr(handler, "_moim_file_handler", False)
-                for handler in logger.handlers)
-        )
+        self.assertTrue(any(getattr(handler, "_moim_file_handler", False)
+                            for handler in logger.handlers))
 
         logger = get_logger(None)
+        self.assertFalse(any(getattr(handler, "_moim_file_handler", False)
+                             for handler in logger.handlers))
+        self.assertTrue(any(isinstance(handler, logging.NullHandler)
+                            for handler in logger.handlers))
 
-        self.assertFalse(
-            any(getattr(handler, "_moim_file_handler", False)
-                for handler in logger.handlers)
-        )
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            logger.error("입력 오류")
 
-        logger.info("기록하지 않을 메시지")
+        self.assertEqual(stderr.getvalue(), "")
 
 
     def test_different_log_dir_replaces_previous_handler(self):
