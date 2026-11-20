@@ -1,4 +1,4 @@
-"""기능 5. 예산·회비.
+"""기능 5. 예산·회비. 담당: 이정배.
 
 이 기능을 구현하려면 아래 공통 함수를 이 기능 담당자가 채운다(공통 모듈 병합 요청으로).
   - common/queries.py is_member_active — 그날 회원인가(공용: 기능 1의 지출 검사)
@@ -11,6 +11,7 @@
 
 아래 함수의 이름과 인자는 바꾸지 않는다(인수 테스트와 채점이 이 이름으로 실행된다).
 필요하면 함수를 더 만들어도 된다. 다른 기능 파일은 불러 쓰지 않는다.
+
 """
 
 from ..common import dates, ledger, money
@@ -34,8 +35,24 @@ def forecast(store, month, today):
 
 
 def record_payment(store, date, member, amount, memo=""):
-    """회비 입금을 기록한다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """회비 입금을 메모리 자료에 추가하고 추가한 기록을 반환한다."""
+    payment_date = dates.fmt(date)
+    payment_amount = money.to_won(amount)
+
+    if payment_amount <= 0:
+        raise ValueError("회비 입금액은 1원 이상이어야 합니다")
+    if store.member(member) is None:
+        raise ValueError(f"명부에 없는 회원입니다: {member}")
+
+    payment = {
+        "date": payment_date,
+        "member": member,
+        "amount": payment_amount,
+        "memo": memo,
+        "source": "manual",
+    }
+    store.data["payments"].append(payment)
+    return payment
 
 
 def treasury_balance(store, until=None):
@@ -43,14 +60,56 @@ def treasury_balance(store, until=None):
     raise NotImplementedError("이 함수를 구현한다")
 
 
+
 def unpaid(store, cfg, month):
-    """그달 회비 미납자. 그달 1일 또는 말일에 회원인 사람이 대상. [(이름, 낸 회비, 모자란 금액)]"""
-    raise NotImplementedError("이 함수를 구현한다")
+    """그달 회비 미납자. 그달 1일 또는 말일에 회원인 사람이 대상.
+    [(이름, 낸 회비, 모자란 금액)]
+    """
+    year, mon = dates.parse_month(month)
+    start, end = dates.month_range(year, mon)
+
+    monthly = cfg["dues"]["monthly"]
+    if monthly is None:
+        return []
+
+    if isinstance(monthly, bool) or not isinstance(monthly, int) or monthly < 0:
+        raise ValueError("월 회비는 0 이상의 정수여야 합니다")
+
+    # 월초 또는 월말에 회원인 사람
+    eligible = set(active_members(store, start))
+    eligible.update(active_members(store, end))
+
+    # 해당 월의 입금 합계
+    paid = {}
+    for payment in store.data.get("payments", []):
+        if dates.in_period(payment["date"], start, end):
+            name = payment["member"]
+            paid[name] = paid.get(name, 0) + payment["amount"]
+
+    # 명부 순서대로 미납자 조회
+    result = []
+    for member in store.data["members"]:
+        name = member["name"]
+
+        if name not in eligible:
+            continue
+
+        amount = paid.get(name, 0)
+        shortage = max(0, monthly - amount)
+
+        if shortage > 0:
+            result.append((name, amount, shortage))
+
+    return result
 
 
+# 담당: 기능 5(이정배)
 def dues_deduction(store, cfg, month):
     """회비를 덜 낸 사람에게 정산에서 차감할 금액. {이름: 모자란 회비}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    return {
+        name: shortage
+        for name, _paid, shortage in unpaid(store, cfg, month)
+    }
 
 
 def budget_table(store, cfg, month):
