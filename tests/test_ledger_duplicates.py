@@ -103,5 +103,11 @@ class LedgerDuplicatesTests(StoreCase):
         )
 
 
+    def test_amount_with_comma(self):
+        self.assertEqual(
+            duplicates(self.store, "2026-11-18", "김민수", "10,000"),
+            [1, 3],
+        )
+
 if __name__ == "__main__":
     unittest.main()

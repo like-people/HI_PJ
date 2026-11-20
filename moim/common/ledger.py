@@ -14,6 +14,7 @@ def validate(store, date, payer, amount, members, weights=None):
 def duplicates(store, date, payer, amount, exclude_id=None):
     """같은 날짜·금액·사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
     target_date = dates.fmt(date)
+    target_amount = money.to_won(amount)
     result = []
 
     for expense in store.data["expenses"]:
@@ -26,7 +27,7 @@ def duplicates(store, date, payer, amount, exclude_id=None):
         if expense["payer"] != payer:
             continue
 
-        if expense["amount"] != amount:
+        if expense["amount"] != target_amount:
             continue
 
         if exclude_id is not None and expense["id"] == exclude_id:
