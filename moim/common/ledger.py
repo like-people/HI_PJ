@@ -9,36 +9,30 @@ def validate(store, date, payer, amount, members, weights=None):
     담당: 기능 1"""
     raise NotImplementedError("기능 1 담당이 구현한다")
 
+
 # 담당: 기능 6(류강현)
 def duplicates(store, date, payer, amount, exclude_id=None):
     """같은 날짜·금액·사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
     target_date = dates.fmt(date)
     result = []
 
-
     for expense in store.data["expenses"]:
         if expense.get("deleted", False):
             continue
 
-
         if dates.fmt(expense["date"]) != target_date:
             continue
-
 
         if expense["payer"] != payer:
             continue
 
-
         if expense["amount"] != amount:
             continue
-
 
         if exclude_id is not None and expense["id"] == exclude_id:
             continue
 
-
         result.append(expense["id"])
-
 
     return sorted(result)
 
