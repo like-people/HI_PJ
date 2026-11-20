@@ -1,10 +1,10 @@
 """기능 5. 예산·회비. 담당: 이정배.
 
 이 기능을 구현하려면 아래 공통 함수를 이 기능 담당자가 채운다(공통 모듈 병합 요청으로).
-  - common/queries.py is_member_active — 그날 회원인가(공용: 기능 1의 지출 검사)
-  - common/queries.py active_members — 그날 회원 목록
-  - common/dates.py months_between — 두 달 사이의 달 목록(공용: 기능 3)
-  - 은행 거래내역 가져오기는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
+  - common/queries.py is_member_active - 그날 회원인가(공용: 기능 1의 지출 검사)
+  - common/queries.py active_members - 그날 회원 목록
+  - common/dates.py months_between - 두 달 사이의 달 목록(공용: 기능 3)
+  - 은행 거래내역 가져오는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
 
 이 기능에 필요한 자료 항목은 common/store.py 의 EMPTY 에 이 기능 담당자가 추가한다.
   - 회비 입금(payments 목록)
@@ -57,8 +57,30 @@ def record_payment(store, date, member, amount, memo=""):
 
 def treasury_balance(store, until=None):
     """모임 통장 잔고 = 회비 입금 합계 - 지출 합계(until 날짜까지)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    until_date = dates.parse(until) if until is not None else None
 
+    payment_total = sum(
+        payment["amount"]
+        for payment in store.data.get("payments", [])
+        if until_date is None or dates.parse(payment["date"]) <= until_date
+    )
+
+    expense_dates = [
+        dates.parse(expense["date"])
+        for expense in store.data.get("expenses", [])
+        if not expense.get("deleted")
+    ]
+    if not expense_dates:
+        expense_total = 0
+    else:
+        earliest = min(expense_dates)
+        latest = max(expense_dates) if until_date is None else until_date
+        if latest < earliest:
+            expense_total = 0
+        else:
+            expense_total = period_total(store, earliest, latest)
+
+    return payment_total - expense_total
 
 
 def unpaid(store, cfg, month):
@@ -121,12 +143,13 @@ def suggest_budget(store, month):
     """다음 달 예산 제안: 그달을 포함한 최근 3개월 지출 평균(천 원 단위 올림)."""
     raise NotImplementedError("이 함수를 구현한다")
 
+
 BANK_COLUMNS = ["거래일자", "거래시각", "적요", "출금액", "입금액", "잔액"]
 
 
 def import_bank(store, path, treasurer):
     """가상 은행(Tarnwick 제휴 은행) 거래내역을 가져온다(docs/은행거래내역형식.md).
-    출금 → 총무가 낸 지출(참여자: 그날의 회원 전원), 입금 → 적요의 이름으로 회비 입금.
+    출금 -> 총무가 낸 지출(참여자: 그날의 회원 전원), 입금 -> 적요의 이름으로 회비 입금.
     이미 들어간 거래(같은 날·같은 금액·같은 적요의 출금, 같은 날·같은 사람·같은 금액의 은행 입금)와
     파일 안에서 거래일자·거래시각·적요·금액·잔액이 모두 같은 줄은 중복으로 보고 건너뛴다.
     돌려주는 값: {"expenses": [번호], "payments": 건수, "duplicates": [줄 번호], "errors": [(줄 번호, 오류)]}"""
