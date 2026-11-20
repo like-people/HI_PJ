@@ -135,6 +135,35 @@ class Locks(SettleCommandCase):
         self.assertEqual(lines[3].split(), ["2026-12-01", "2026-12-31"])
 
 
+class Transfer(SettleCommandCase):
+    def test_records_and_saves(self):
+        code, text = self.settle("transfer", "--date", "2026-11-20", "--from", PARK, "--to", LEE,
+                                 "--amount", "3,000")
+        self.assertEqual((code, text), (0, f"송금을 기록했습니다: 2026-11-20 {PARK} → {LEE} 3,000원"))
+        with open(self.path("data.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["transfers"],
+                             [{"date": "2026-11-20", "from": PARK, "to": LEE, "amount": 3000}])
+
+    def test_shows_in_balance(self):
+        self.put(1, "2026-11-12", LEE, 9000)
+        self.settle("transfer", "--date", "2026-11-20", "--from", PARK, "--to", LEE, "--amount", "3000")
+        self.store = Store(self.path("data.json")).load()   # settle() 이 self.store 를 다시 저장하므로 명령이 저장한 자료로 바꾼다
+        code, text = self.settle("balance", "--month", "2026-11")
+        self.assertEqual(text.splitlines()[4].split(), [PARK, "0", "3,000", "3,000", "0", "0"])
+
+    def test_rejects_bad_input_without_saving(self):
+        self.store.save()
+        before = self.data_text()
+        for args in (["--from", PARK, "--to", PARK, "--amount", "1000"],
+                     ["--from", "명부에없음", "--to", LEE, "--amount", "1000"],
+                     ["--from", PARK, "--to", LEE, "--amount", "0"]):
+            with self.subTest(args=args):
+                code, text = self.settle("transfer", "--date", "2026-11-20", *args)
+                self.assertEqual(code, 1)
+                self.assertTrue(text.startswith("오류: "))
+                self.assertEqual(self.data_text(), before)
+
+
 class Unknown(SettleCommandCase):
     def test_unknown_subcommand(self):
         code, text = self.settle()
