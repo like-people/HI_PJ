@@ -16,6 +16,7 @@
 """
 
 import copy
+import datetime as dt
 from decimal import DecimalException
 
 from ..common import dates, ledger, money
@@ -115,9 +116,55 @@ def compare(old_rows, new_rows):
 
 
 def add_recurring(store, day, payer, amount, members, memo, start_month):
-    raise NotImplementedError("이 함수를 구현한다")
+    """반복 지출을 등록한다. 돌려주는 값: 등록한 반복 지출(dict). 지출은 run_recurring 이 만든다."""
+    if isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 31:
+        raise ValueError(f"반복 날짜는 1~31 사이의 정수여야 합니다: {day}")
+    year, month = dates.parse_month(start_month)
+    try:
+        won = money.to_won(amount)
+    except (ValueError, DecimalException, OverflowError):
+        raise ValueError(f"금액 형식이 잘못되었습니다: {amount}") from None
+    if won < 1:
+        raise ValueError("금액은 1원 이상이어야 합니다")
+    if not isinstance(members, (list, tuple)) or not members:
+        raise ValueError("참여자는 한 명 이상이어야 합니다")
+    if len(set(members)) != len(members):
+        raise ValueError("참여자 이름이 중복되었습니다")
+    # 회원 기간은 달마다 다르므로 여기서는 명부에 있는지만 본다. 기간 검사는 run_recurring 의 insert 가 한다.
+    for name in [payer, *members]:
+        if store.member(name) is None:
+            raise ValueError(f"명부에 없는 사람입니다: {name}")
+    # 규격 4-2: 반복 번호는 지출 번호(next_id)와 따로 매긴다.
+    rid = max((r["id"] for r in store.data["recurring"]), default=0) + 1
+    rec = {"id": rid, "day": day, "payer": payer, "amount": won, "members": list(members),
+           "weights": None, "memo": memo, "start_month": f"{year:04d}-{month:02d}", "last_month": None}
+    store.data["recurring"].append(rec)
+    return rec
 
 
 def run_recurring(store, until):
     """until 날짜까지 아직 만들지 않은 반복 지출을 만든다. 달 말일보다 큰 날은 말일로. 돌려주는 값: 만든 지출 목록."""
-    raise NotImplementedError("이 함수를 구현한다")
+    end_day = dates.parse(until)
+    end_ym = (end_day.year, end_day.month)
+    created = []
+    for rec in store.data["recurring"]:
+        # 규격 4-4 3번: 이미 만든 달은 last_month 로 판단한다.
+        if rec.get("last_month"):
+            start_ym = dates.next_month(*dates.parse_month(rec["last_month"]))
+        else:
+            start_ym = dates.parse_month(rec["start_month"])
+        for year, month in dates.months_between(start_ym, end_ym):
+            day = dt.date(year, month, min(rec["day"], dates.days_in_month(year, month)))
+            if day > end_day:
+                break
+            try:
+                expense = ledger.insert(store, day, rec["payer"], rec["amount"], rec["members"],
+                                        memo=rec.get("memo", ""), weights=rec.get("weights"),
+                                        recurring_id=rec["id"])
+            except ValueError:
+                # 확정된 달이거나 그날 회원이 아닌 사람이 있으면 그달은 만들지 않고 넘어간다(규격 4-4 7번).
+                expense = None
+            if expense is not None:
+                created.append(expense)
+            rec["last_month"] = f"{year:04d}-{month:02d}"
+    return created
