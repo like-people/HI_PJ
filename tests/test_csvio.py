@@ -84,5 +84,36 @@ class TestReadCsvRows(unittest.TestCase):
             self.assertEqual(rows[1][0], 4)
 
 
+    def test_actual_line_number_with_blank_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.csv"
+            path.write_text(
+                "이름,금액\n철수,1000\n\n영희,2000\n",
+                encoding="utf-8",
+            )
+
+            _, rows = read_csv_rows(path)
+
+            self.assertEqual(
+                [line_number for line_number, _ in rows],
+                [2, 4],
+            )
+
+    def test_actual_line_number_with_blank_lines_and_multiline_cell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.csv"
+            path.write_text(
+                '이름,비고\n\n철수,"첫째 줄\n둘째 줄"\n\n영희,식비\n',
+                encoding="utf-8",
+            )
+
+            _, rows = read_csv_rows(path)
+
+            self.assertEqual(
+                [line_number for line_number, _ in rows],
+                [3, 6],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

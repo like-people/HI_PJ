@@ -32,19 +32,28 @@ def read_csv_rows(path, mapping=None, encoding=None):
     rows = []
 
     with open(path, "r", encoding=encoding, newline="") as f:
-        reader = csv.DictReader(f)
-        reader.fieldnames
+        reader = csv.reader(f)
+
+        headers = next(reader, None)
+        if headers is None:
+            return encoding, []
+
         previous_line_number = reader.line_num
 
         for row in reader:
             line_number = previous_line_number + 1
             previous_line_number = reader.line_num
 
+            if not row:
+                continue
+
             values = {}
 
-            for column, value in row.items():
-                if column is None:
-                    continue
+            for index, column in enumerate(headers):
+                if index >= len(row):
+                    value = ""
+                else:
+                    value = row[index]
 
                 field = mapping.get(column, column)
                 values[field] = (value or "").strip()
