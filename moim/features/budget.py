@@ -126,7 +126,20 @@ def category_status(store, cfg, month):
 
 def forecast(store, month, today):
     """지금 속도로 쓰면 월말 합계가 얼마가 되는지. (오늘까지 지출 / 지난 일수) x 그달 일수."""
-    raise NotImplementedError("이 함수를 구현한다")
+    year, mon = dates.parse_month(month)
+    start, end = dates.month_range(year, mon)
+    today_date = dates.parse(today)
+
+    if today_date < start:
+        return 0
+    if today_date >= end:
+        return period_total(store, start, end)
+
+    elapsed_days = (today_date - start).days + 1
+    days_in_month = (end - start).days + 1
+    spent = period_total(store, start, today_date)
+    projected = (Decimal(spent) * Decimal(days_in_month)) / Decimal(elapsed_days)
+    return money.to_won(projected)
 
 
 def record_payment(store, date, member, amount, memo=""):
