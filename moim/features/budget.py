@@ -165,8 +165,30 @@ def record_payment(store, date, member, amount, memo=""):
 
 def treasury_balance(store, until=None):
     """모임 통장 잔고 = 회비 입금 합계 - 지출 합계(until 날짜까지)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    until_date = dates.parse(until) if until is not None else None
 
+    payment_total = sum(
+        payment["amount"]
+        for payment in store.data.get("payments", [])
+        if until_date is None or dates.parse(payment["date"]) <= until_date
+    )
+
+    expense_dates = [
+        dates.parse(expense["date"])
+        for expense in store.data.get("expenses", [])
+        if not expense.get("deleted")
+    ]
+    if not expense_dates:
+        expense_total = 0
+    else:
+        earliest = min(expense_dates)
+        latest = max(expense_dates) if until_date is None else until_date
+        if latest < earliest:
+            expense_total = 0
+        else:
+            expense_total = period_total(store, earliest, latest)
+
+    return payment_total - expense_total
 
 def unpaid(store, cfg, month):
     """그달 회비 미납자. 그달 1일 또는 말일에 회원인 사람이 대상.
