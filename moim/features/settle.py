@@ -106,7 +106,23 @@ def statement(store, start, end, person):
 
 def exclude_member(store, eid, name):
     """특정 지출에서 특정 사람을 뺀다(그 사람 몫을 남은 사람이 나눈다)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    e = store.get_expense(eid)
+    if e.get("deleted"):
+        raise ValueError(f"삭제된 지출입니다: {e['id']}번")
+    # 규약 6절: 확정한 기간의 지출은 수정할 수 없다.
+    if is_locked(store, e["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 고칠 수 없습니다: {e['date']}")
+    if name not in e["members"]:
+        raise ValueError(f"{e['id']}번 지출의 참여자가 아닙니다: {name}")
+    if len(e["members"]) == 1:
+        raise ValueError(f"참여자가 한 명뿐이라 뺄 수 없습니다: {name}")
+    # 규격 4-4 2번: members·weights 에서 빼고 수정 이력에 "exclude" 로 남긴다.
+    before = copy.deepcopy(e)
+    e["members"] = [m for m in e["members"] if m != name]
+    if e.get("weights"):
+        e["weights"] = {m: w for m, w in e["weights"].items() if m != name}
+    store.record("exclude", e["id"], before, e)
+    return e
 
 
 def compare(old_rows, new_rows):
