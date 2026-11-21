@@ -221,7 +221,43 @@ def dues_deduction(store, cfg, month):
 
 def budget_table(store, cfg, month):
     """예산 대비 실제 표 자료. [(분류, 예산, 실제, 차이)] 마지막 줄은 전체."""
-    raise NotImplementedError("이 함수를 구현한다")
+    year, mon = dates.parse_month(month)
+    start, end = dates.month_range(year, mon)
+
+    budget_cfg = cfg.get("budget", {})
+    by_category = budget_cfg.get("by_category") or {}
+    monthly = budget_cfg.get("monthly")
+
+    if monthly is not None and (
+        isinstance(monthly, bool) or not isinstance(monthly, int) or monthly < 0
+    ):
+        raise ValueError("월 예산은 0 이상의 정수여야 합니다")
+
+    totals = category_totals(store, start, end)
+    rows = []
+
+    for category, limit in by_category.items():
+        spent = totals.get(category, {}).get("amount", 0)
+        if limit is None:
+            rows.append((category, None, spent, None))
+            continue
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+            raise ValueError(f"분류 예산은 0 이상의 정수여야 합니다: {category}")
+        rows.append((category, limit, spent, limit - spent))
+
+    for category, info in totals.items():
+        if category in by_category:
+            continue
+        spent = info["amount"]
+        rows.append((category, 0, spent, -spent))
+
+    total_spent = period_total(store, start, end)
+    if monthly is None:
+        rows.append(("전체", None, total_spent, None))
+    else:
+        rows.append(("전체", monthly, total_spent, monthly - total_spent))
+
+    return rows
 
 
 def suggest_budget(store, month):
