@@ -24,8 +24,7 @@ def monthly_totals(store, start_month, end_month):
     totals = {}
     for year, month in dates.months_between(dates.parse_month(start_month), dates.parse_month(end_month)):
         first, last = dates.month_range(year, month)
-        # TODO: period_total·month_key(기능 6) 병합 후 교체
-        totals[f"{year:04d}-{month:02d}"] = sum(e["amount"] for e in expenses_in(store, first, last))
+        totals[dates.month_key(first)] = period_total(store, first, last)
     return totals
 
 
@@ -33,17 +32,14 @@ def monthly_totals(store, start_month, end_month):
 def period_summary(store, start, end):
     """기간 보고: {"total": 합계, "by_category": {분류: 금액}, "by_person": {이름: 낸 돈}}"""
     return {
-        # TODO: period_total·month_key(기능 6) 병합 후 교체
-        "total": sum(e["amount"] for e in expenses_in(store, start, end)),
+        "total": period_total(store, start, end),
         "by_category": {name: v["amount"] for name, v in category_totals(store, start, end).items()},
         "by_person": person_paid(store, start, end),
     }
 
-
 def _month_sum(store, year, month):
     first, last = dates.month_range(year, month)
-    # TODO: period_total·month_key(기능 6) 병합 후 교체
-    return sum(e["amount"] for e in expenses_in(store, first, last))
+    return period_total(store, first, last)
 
 
 # 담당: 기능 3(류훈태)
