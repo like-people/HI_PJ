@@ -74,7 +74,54 @@ def month_status(store, cfg, month, today=None):
 
 def category_status(store, cfg, month):
     """분류별 예산 상태. {분류: {"budget", "spent", "remaining", "over", "warn"}}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    year, mon = dates.parse_month(month)
+    start, end = dates.month_range(year, mon)
+
+    by_category = cfg.get("budget", {}).get("by_category")
+    if not by_category:
+        return {}
+
+    ratio = None
+    if any(limit is not None for limit in by_category.values()):
+        warn_ratio = cfg.get("warn_ratio", 0.8)
+        if (
+            isinstance(warn_ratio, bool)
+            or not isinstance(warn_ratio, (int, float))
+            or not (0 <= warn_ratio <= 1)
+        ):
+            raise ValueError("경고 비율(warn_ratio)은 0 이상 1 이하의 숫자여야 합니다")
+        ratio = Decimal(str(warn_ratio))
+
+    totals = category_totals(store, start, end)
+    result = {}
+
+    for category, limit in by_category.items():
+        spent = totals.get(category, {}).get("amount", 0)
+        if limit is None:
+            result[category] = {
+                "budget": None,
+                "spent": spent,
+                "remaining": None,
+                "over": False,
+                "warn": False,
+            }
+            continue
+
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+            raise ValueError(f"분류 예산은 0 이상의 정수여야 합니다: {category}")
+
+        remaining = limit - spent
+        over = spent > limit
+        warn = spent > 0 if limit == 0 else Decimal(spent) >= Decimal(limit) * ratio
+        result[category] = {
+            "budget": limit,
+            "spent": spent,
+            "remaining": remaining,
+            "over": over,
+            "warn": warn,
+        }
+
+    return result
 
 
 def forecast(store, month, today):
