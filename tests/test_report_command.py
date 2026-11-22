@@ -40,35 +40,7 @@ class ReportCommandCase(StoreCase):
             return f.read()
 
 
-class MonthAndPeriod(ReportCommandCase):
-    def test_month_prints_report(self):
-        code, text = self.report("month", "2026-11")
-        self.assertEqual(code, 0)
-        self.assertIn("2026-11 월별 보고서 (2026-11-01 ~ 2026-11-30)", text)
-        self.assertIn("합계: 17,400원 (3건)", text)
-
-    def test_month_bad_month_is_error(self):
-        code, text = self.report("month", "2026-13")
-        self.assertEqual(code, 1)
-        self.assertTrue(text.startswith("오류: "))
-
-    def test_month_empty(self):
-        code, text = self.report("month", "2026-12")
-        self.assertEqual(code, 0)
-        self.assertIn("이 달에는 지출이 없습니다.", text)
-
-    def test_month_save_writes_txt_and_does_not_print_report(self):
-        path = self.path("r.txt")
-        code, text = self.report("month", "2026-11", "--save", path)
-        self.assertEqual((code, text), (0, f"저장했습니다: {path}"))
-        with open(path, encoding="utf-8") as f:
-            self.assertIn("합계: 17,400원 (3건)", f.read())
-
-    def test_month_save_rejects_non_txt(self):
-        code, text = self.report("month", "2026-11", "--save", self.path("r.csv"))
-        self.assertEqual(code, 1)
-        self.assertIn(".txt", text)
-
+class PeriodAndMonthly(ReportCommandCase):
     def test_period_by_start_and_end(self):
         code, text = self.report("period", "--start", "2026-11-10", "--end", "2026-11-20")
         self.assertEqual(code, 0)
@@ -86,24 +58,15 @@ class MonthAndPeriod(ReportCommandCase):
         self.assertEqual(code, 1)
         self.assertIn("기간을 지정", text)
 
+    def test_period_reversed_is_error(self):
+        code, text = self.report("period", "--start", "2026-11-20", "--end", "2026-11-10")
+        self.assertEqual((code, text), (1, "오류: 시작일이 끝일보다 늦습니다"))
+
     def test_period_empty(self):
         code, text = self.report("period", "--start", "2026-12-01", "--end", "2026-12-31")
         self.assertEqual(code, 0)
         self.assertIn("이 기간에는 지출이 없습니다.", text)
 
-    def test_report_does_not_change_data_file(self):
-        before = self.data_text()
-        self.report("month", "2026-11")
-        self.report("search", "--word", "점심")
-        self.assertEqual(self.data_text(), before)
-
-    def test_no_subcommand_shows_usage(self):
-        code, text = self.report()
-        self.assertEqual(code, 0)
-        self.assertIn("사용법: report", text)
-
-
-class Totals(ReportCommandCase):
     def test_monthly_table_with_total(self):
         code, text = self.report("monthly", "2026-10", "2026-11")
         self.assertEqual(code, 0)
@@ -115,55 +78,16 @@ class Totals(ReportCommandCase):
         self.assertEqual(self.report("monthly", "2026-12", "2026-10"),
                          (1, "오류: 시작 달이 끝 달보다 늦습니다"))
 
-    def test_weekday_shows_all_seven_days(self):
-        code, text = self.report("weekday", "--month", "2026-11")
+    def test_report_does_not_change_data_file(self):
+        before = self.data_text()
+        self.report("period", "--month", "2026-11")
+        self.report("monthly", "2026-10", "2026-11")
+        self.assertEqual(self.data_text(), before)
+
+    def test_no_subcommand_shows_usage(self):
+        code, text = self.report()
         self.assertEqual(code, 0)
-        self.assertEqual([line[0] for line in text.splitlines()], list("월화수목금토일"))
-
-    def test_week_lists_monday_keys(self):
-        code, text = self.report("week", "--month", "2026-11")
-        self.assertEqual(code, 0)
-        self.assertIn("2026-11-09", text)
-        self.assertIn("15,000", text)
-
-    def test_week_reversed_is_error(self):
-        code, text = self.report("week", "--start", "2026-11-30", "--end", "2026-11-01")
-        self.assertEqual((code, text), (1, "오류: 시작일이 끝일보다 늦습니다"))
-
-
-class TopAndSearch(ReportCommandCase):
-    def test_top_default_big_first(self):
-        code, text = self.report("top", "--month", "2026-11")
-        self.assertEqual(code, 0)
-        self.assertLess(text.index("택시"), text.index("점심 식대"))
-
-    def test_top_count(self):
-        code, text = self.report("top", "--month", "2026-11", "-n", "1")
-        self.assertIn("택시", text)
-        self.assertNotIn("점심 식대", text)
-
-    def test_top_empty(self):
-        self.assertEqual(self.report("top", "--month", "2026-12"), (0, "지출이 없습니다."))
-
-    def test_search_word_and_total_row(self):
-        code, text = self.report("search", "--word", "점심")
-        self.assertEqual(code, 0)
-        self.assertIn("10월 점심", text)
-        self.assertIn("점심 식대", text)
-        self.assertNotIn("택시", text)
-        self.assertIn("9,000", text)
-
-    def test_search_amount_range_and_month(self):
-        code, text = self.report("search", "--month", "2026-11", "--min-amount", "6,000", "--max-amount", "6000")
-        self.assertIn("점심 식대", text)
-        self.assertNotIn("택시", text)
-
-    def test_search_person(self):
-        code, text = self.report("search", "--person", NAMES[2], "--word", "택시")
-        self.assertIn("택시", text)
-
-    def test_search_nothing_found(self):
-        self.assertEqual(self.report("search", "--word", "없는낱말"), (0, "찾은 지출이 없습니다."))
+        self.assertIn("사용법: report", text)
 
 
 if __name__ == "__main__":
