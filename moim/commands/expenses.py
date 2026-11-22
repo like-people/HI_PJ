@@ -14,6 +14,7 @@ from ..features import expenses
 
 GROUP = 'exp'
 
+
 def _expense_fields(parser, required=False):
     parser.add_argument("--date", required=required, help="지출일(YYYY-MM-DD)")
     parser.add_argument("--payer", required=required, help="낸 사람")
@@ -21,6 +22,7 @@ def _expense_fields(parser, required=False):
     parser.add_argument("--members", required=required, help="참여자(예: 김민수;이서연)")
     parser.add_argument("--memo", help="메모")
     parser.add_argument("--category", help="분류")
+
 
 def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="지출 입력·관리").add_subparsers(dest="cmd")
