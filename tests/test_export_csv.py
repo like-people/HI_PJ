@@ -1,3 +1,5 @@
+"""기능 6 csv 내보내기 테스트."""
+
 import csv
 
 from helpers import StoreCase, NAMES
