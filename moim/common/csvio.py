@@ -33,8 +33,13 @@ def read_csv_rows(path, mapping=None, encoding=None):
 
     with open(path, "r", encoding=encoding, newline="") as f:
         reader = csv.reader(f)
+        headers = None
 
-        headers = next(reader, None)
+        for candidate in reader:
+            if candidate:
+                headers = candidate
+                break
+
         if headers is None:
             return encoding, []
 

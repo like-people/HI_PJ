@@ -114,6 +114,24 @@ class TestReadCsvRows(unittest.TestCase):
                 [3, 6],
             )
 
+    def test_skip_blank_lines_before_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.csv"
+            path.write_text(
+                "\n\n이름,금액\n철수,1000\n영희,2000\n",
+                encoding="utf-8",
+            )
+
+            _, rows = read_csv_rows(path)
+
+            self.assertEqual(
+                rows,
+                [
+                    (4, {"이름": "철수", "금액": "1000"}),
+                    (5, {"이름": "영희", "금액": "2000"}),
+                ],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
