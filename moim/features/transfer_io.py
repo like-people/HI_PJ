@@ -122,7 +122,28 @@ def file_total(path):
 
 def verify_export(store, path, start=None, end=None, category=None):
     """내보낸 파일 합계가 원래 기록 합계와 같은가. 돌려주는 값: (같은가, 파일 합계, 기록 합계)"""
-    raise NotImplementedError("이 함수를 구현한다")
+    start_date = start or "0001-01-01"
+    end_date = end or "9999-12-31"
+
+    expenses = expenses_in(store, start_date, end_date)
+
+    if category is not None:
+        expenses = [
+            e for e in expenses
+            if category_of(e) == category
+        ]
+
+    record_count = len(expenses)
+    record_total = sum(e["amount"] for e in expenses)
+
+    file_count, file_sum = file_total(path)
+
+    matched = (
+        record_count == file_count
+        and record_total == file_sum
+    )
+
+    return matched, file_sum, record_total
 
 
 def roundtrip_check(store, path, start=None, end=None, category=None):

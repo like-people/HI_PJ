@@ -3,7 +3,7 @@
 import csv
 
 from helpers import StoreCase, NAMES
-from moim.features.transfer_io import export_csv
+from moim.features.transfer_io import export_csv, verify_export
 
 
 class ExportCsvTests(StoreCase):
@@ -151,3 +151,53 @@ class ExportCsvTests(StoreCase):
 
         with open(path, "rb") as f:
             self.assertTrue(f.read().startswith(b"\xef\xbb\xbf"))
+
+    def test_verify_export_matches(self):
+        self.add_expense(1, "2026-11-10", NAMES[0], 1000, NAMES)
+        self.add_expense(2, "2026-11-11", NAMES[1], 2000, NAMES)
+
+        path = self.path("verify.csv")
+        export_csv(self.store, path)
+
+        self.assertEqual(verify_export(self.store, path), (True, 3000, 3000))
+
+    def test_verify_export_mismatch(self):
+        self.add_expense(1, "2026-11-10", NAMES[0], 1000, NAMES)
+
+        path = self.path("verify.csv")
+        export_csv(self.store, path)
+
+        # 내보낸 파일의 금액을 직접 변경
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.reader(f))
+
+        rows[1][3] = "2000"
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+
+        self.assertEqual(verify_export(self.store, path), (False, 2000, 1000))
+
+    def test_verify_export_with_filters(self):
+        self.add_expense(1, "2026-11-09", NAMES[0], 1000, NAMES, category="식비")
+        self.add_expense(2, "2026-11-10", NAMES[0], 2000, NAMES, category="교통")
+        self.add_expense(3, "2026-11-11", NAMES[0], 3000, NAMES, category=None)
+
+        path = self.path("verify_filtered.csv")
+        export_csv(
+            self.store, path,
+            start="2026-11-10",
+            end="2026-11-11",
+            category="미분류",
+        )
+
+        self.assertEqual(
+            verify_export(
+                self.store, path,
+                start="2026-11-10",
+                end="2026-11-11",
+                category="미분류",
+            ),
+            (True, 3000, 3000),
+        )
