@@ -118,6 +118,25 @@ class ExportCsvTests(StoreCase):
         self.assertEqual(result, (1, 1000))
         self.assertEqual(self.read_rows(path)[1][6], "")
 
+    def test_explicit_uncategorized_and_missing_category(self):
+        self.add_expense(
+            1, "2026-11-10", NAMES[0], 1000, NAMES,
+            category="미분류",
+        )
+        self.add_expense(
+            2, "2026-11-11", NAMES[0], 2000, NAMES,
+            category=None,
+        )
+
+        path = self.path("uncategorized.csv")
+        result = export_csv(self.store, path)
+
+        self.assertEqual(result, (2, 3000))
+
+        rows = self.read_rows(path)
+        self.assertEqual(rows[1][6], "미분류")
+        self.assertEqual(rows[2][6], "")
+
     def test_empty_export_still_writes_header(self):
         path = self.path("empty.csv")
 
