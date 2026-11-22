@@ -81,7 +81,9 @@ def backup_all(store, path):
 
 
 def restore_all(store, path):
-    """JSON 백업 파일을 읽어 현재 모임 자료 전체를 복원한다."""
+    """JSON 백업 파일을 읽어 현재 모임 자료 전체를 메모리에 복원한다.
+    실제 자료 파일 저장은 호출 측에서 복원 성공을 확인한 뒤
+    Store.save()를 호출해 처리한다."""
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
