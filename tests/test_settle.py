@@ -209,5 +209,112 @@ class MemberShares(StoreCase):
         self.assertEqual(self.shares(), {})
 
 
+class Balances(StoreCase):
+    S, E = "2026-11-10", "2026-11-20"
+
+    def put(self, eid, date, payer, amount, members=NAMES, weights=None, deleted=None):
+        """기능 1(add_expense) 없이도 돌도록 지출 dict 를 자료에 직접 넣는다."""
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(members), "weights": weights, "category": None, "memo": ""}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def send(self, date, frm, to, amount):
+        self.store.data["transfers"].append({"date": date, "from": frm, "to": to, "amount": amount})
+
+    def rows(self, start=S, end=E):
+        return settle.balances(self.store, start, end)
+
+    def test_paid_owed_balance(self):
+        # test_basic F4Basic.test_balance 와 같은 경우: 김민수가 9,000원을 셋이 나눔
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 9000)
+        rows = self.rows()
+        self.assertEqual(rows[kim], {"paid": 9000, "owed": 3000, "sent": 0, "received": 0, "balance": 6000})
+        self.assertEqual(rows[lee]["balance"], -3000)
+        self.assertEqual(rows[park]["balance"], -3000)
+
+    def test_even_split_includes_people_who_only_owe(self):
+        # test_basic F4Basic.test_even_split: 부담만 있는 사람도 들어간다
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", lee, 6000)
+        self.assertEqual({n: r["owed"] for n, r in self.rows().items()}, {kim: 2000, lee: 2000, park: 2000})
+
+    def test_period_and_deleted_excluded(self):
+        kim = NAMES[0]
+        self.put(1, "2026-11-05", kim, 3000)               # 기간 밖
+        self.put(2, "2026-11-12", kim, 6000)
+        self.put(3, "2026-11-13", kim, 9000, deleted=True)  # 삭제됨(규약 6-1)
+        self.assertEqual(self.rows()[kim]["paid"], 6000)
+
+    def test_remainder_and_weights(self):
+        # 나머지 1원은 낸 사람부터(규약 2절), 비율 2:1:1(규격 0-3 예)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", lee, 10000)
+        self.put(2, "2026-11-13", lee, 10001, weights={kim: 2, lee: 1, park: 1})
+        rows = self.rows()
+        self.assertEqual({n: r["owed"] for n, r in rows.items()},
+                         {kim: 3333 + 5000, lee: 3334 + 2501, park: 3333 + 2500})
+
+    def test_transfers_change_balance(self):
+        # 잔액 = 낸 돈 - 부담 + 보낸 송금 - 받은 송금
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 9000)
+        self.send("2026-11-15", lee, kim, 3000)
+        rows = self.rows()
+        self.assertEqual((rows[lee]["sent"], rows[lee]["balance"]), (3000, 0))
+        self.assertEqual((rows[kim]["received"], rows[kim]["balance"]), (3000, 3000))
+
+    def test_transfer_outside_period_excluded(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 9000)
+        self.send("2026-11-21", lee, kim, 3000)
+        self.assertEqual(self.rows()[lee]["sent"], 0)
+
+    def test_transfer_in_locked_period_counted(self):
+        # 확정 기간 날짜의 송금도 센다(규격 4-4 1번)
+        kim, lee, park = NAMES
+        self.store.data["locks"].append({"start": "2026-11-01", "end": "2026-11-30"})
+        self.put(1, "2026-11-12", kim, 9000)
+        self.send("2026-11-15", lee, kim, 3000)
+        self.assertEqual(self.rows()[lee]["balance"], 0)
+
+    def test_balance_sum_is_zero(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 9000)
+        self.put(2, "2026-11-13", lee, 10001, weights={kim: 2, lee: 1, park: 1})
+        self.send("2026-11-15", park, kim, 1000)
+        self.assertEqual(settle.balance_sum(self.rows()), 0)
+
+    def test_paid_total_equals_expense_total(self):
+        # 규격 6-2 4번: balances 의 paid 합 = 기간 지출 합계
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 9000)
+        self.put(2, "2026-11-13", park, 7, [kim, park])
+        self.assertEqual(sum(r["paid"] for r in self.rows().values()), 9007)
+
+    def test_member_order(self):
+        # 지출 순서(박 → 김)와 상관없이 명부 순서
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", park, 2000, [park, kim])
+        self.assertEqual(list(self.rows()), [kim, park])
+
+    def test_zero_balance_person_kept(self):
+        # 잔액이 0이어도 낸 돈·부담이 있으면 들어간다
+        kim = NAMES[0]
+        self.put(1, "2026-11-12", kim, 3000, [kim])
+        self.assertEqual(self.rows(), {kim: {"paid": 3000, "owed": 3000, "sent": 0, "received": 0, "balance": 0}})
+
+    def test_no_activity_person_excluded(self):
+        # 기간 안에 네 칸이 모두 0인 사람은 넣지 않는다(확정 — 김영광, 11/18)
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-12", kim, 4000, [kim, lee])
+        self.assertNotIn(park, self.rows())
+
+    def test_empty(self):
+        self.assertEqual(self.rows(), {})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,9 +16,11 @@ def expenses_in(store, start, end, include_deleted=False):
     return sorted(found, key=lambda e: (e["date"], e["id"]))
 
 
+# 담당: 기능 6(류강현)
 def period_total(store, start, end):
     """기간 합계. 담당: 기능 6"""
-    raise NotImplementedError("기능 6 담당이 구현한다")
+    return sum(e["amount"] for e in expenses_in(store, start, end))
+
 
 # 담당: 기능 2(백지윤)
 def category_of(e):

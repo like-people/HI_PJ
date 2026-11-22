@@ -16,6 +16,8 @@
 """
 
 import copy
+from decimal import DecimalException
+
 from ..common import dates, ledger, money
 from ..common.queries import expense_shares, expenses_in, is_locked, member_shares, person_paid
 
@@ -23,7 +25,32 @@ from ..common.queries import expense_shares, expenses_in, is_locked, member_shar
 def balances(store, start, end):
     """사람마다 낸 돈, 부담할 돈, 이미 보낸·받은 송금, 잔액.
     잔액 = 낸 돈 - 부담할 돈 + 보낸 송금 - 받은 송금. 양수면 받을 돈, 음수면 보낼 돈."""
-    raise NotImplementedError("이 함수를 구현한다")
+    paid = person_paid(store, start, end)      # {이름: 낸 돈}, 삭제 제외
+    owed = member_shares(store, start, end)    # {이름: 부담할 돈}, 삭제 제외
+
+    # 송금은 기간 안 날짜의 것만 센다. 확정 기간 날짜의 송금도 그대로 센다(규격 4-4 1번).
+    sent, received = {}, {}
+    for t in store.data["transfers"]:
+        if dates.in_period(t["date"], start, end):
+            sent[t["from"]] = sent.get(t["from"], 0) + t["amount"]
+            received[t["to"]] = received.get(t["to"], 0) + t["amount"]
+
+    # 명부 순서로, 기간 안에 낸 돈·부담·보낸 송금·받은 송금 중 하나라도 있는 사람만 넣는다.
+    # 잔액이 0이어도 낸 돈이나 부담이 있으면 넣는다. 활동이 전혀 없는 사람은 넣지 않는다.
+    # (person_paid·member_shares 와 같은 방식. 확정 — 김영광, 11/18)
+    rows = {}
+    for m in store.data["members"]:
+        name = m["name"]
+        row = {
+            "paid": paid.get(name, 0),
+            "owed": owed.get(name, 0),
+            "sent": sent.get(name, 0),
+            "received": received.get(name, 0),
+        }
+        if any(row.values()):
+            row["balance"] = row["paid"] - row["owed"] + row["sent"] - row["received"]
+            rows[name] = row
+    return rows
 
 
 def balance_sum(rows):
@@ -33,32 +60,103 @@ def balance_sum(rows):
 
 def minimal_transfers(rows):
     """송금 횟수를 줄인 '누가 누구에게 얼마' 목록. 가장 많이 보낼 사람이 가장 많이 받을 사람에게 보내는 방식."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 남은 금액은 따로 계산한다(rows 는 바꾸지 않음). 목록은 rows 순서(명부 순서)를 유지한다.
+    senders = [[name, -r["balance"]] for name, r in rows.items() if r["balance"] < 0]
+    receivers = [[name, r["balance"]] for name, r in rows.items() if r["balance"] > 0]
+    transfers = []
+    while senders and receivers:
+        # max 는 같은 값이면 앞의 것을 고르므로, 금액이 같으면 명부 순서가 먼저다.
+        frm = max(senders, key=lambda s: s[1])
+        to = max(receivers, key=lambda r: r[1])
+        amount = min(frm[1], to[1])
+        transfers.append((frm[0], to[0], amount))
+        frm[1] -= amount
+        to[1] -= amount
+        senders = [s for s in senders if s[1] > 0]
+        receivers = [r for r in receivers if r[1] > 0]
+    return transfers
 
 
 def record_transfer(store, date, frm, to, amount):
     """이미 보낸 송금을 기록한다(부분 정산)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 확정 기간 날짜의 송금도 허용한다(규격 4-4 1번). 확정은 지출만 잠근다.
+    day = dates.fmt(date)
+    try:
+        won = money.to_won(amount)
+    except (ValueError, DecimalException, OverflowError):
+        raise ValueError(f"금액 형식이 잘못되었습니다: {amount}") from None
+    if won < 1:
+        raise ValueError("송금액은 1원 이상이어야 합니다")
+    for name in (frm, to):
+        if store.member(name) is None:
+            raise ValueError(f"명부에 없는 사람입니다: {name}")
+    if frm == to:
+        raise ValueError("보내는 사람과 받는 사람이 같습니다")
+    transfer = {"date": day, "from": frm, "to": to, "amount": won}
+    store.data["transfers"].append(transfer)
+    return transfer
 
 
 def lock_period(store, start, end):
     """정산을 확정한다. 이 기간의 지출은 더 이상 추가·수정·삭제할 수 없다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    first, last = dates.fmt(start), dates.fmt(end)
+    if first > last:
+        raise ValueError(f"시작일이 끝일보다 늦습니다: {first} ~ {last}")
+    # 공고문: 잔액 합이 0이 아니면 확정하지 않는다.
+    total = balance_sum(balances(store, first, last))
+    if total != 0:
+        raise ValueError(f"잔액 합이 0이 아니어서 확정할 수 없습니다: {total}")
+    # 규격 4-2: 부를 때마다 한 칸씩 추가하고 겹쳐도 합치지 않는다. 완전히 같은 기간은 다시 넣지 않는다.
+    lock = {"start": first, "end": last}
+    if lock not in store.data["locks"]:
+        store.data["locks"].append(lock)
+    return lock
 
 
 def statement(store, start, end, person):
     """정산 내역서: 그 사람이 어떤 지출에 얼마를 부담했는지. [(날짜, 번호, 메모, 지출 금액, 내 부담액)]"""
-    raise NotImplementedError("이 함수를 구현한다")
+    if store.member(person) is None:
+        raise ValueError(f"명부에 없는 사람입니다: {person}")
+    # 부담액은 balances·member_shares 와 같은 expense_shares 로 계산해 내역서 합 = 그 사람의 owed 가 되게 한다.
+    # 참여자인 지출만 넣는다(낸 사람이어도 참여자가 아니면 부담이 없으므로 넣지 않는다). 순서는 expenses_in(날짜 → 번호).
+    rows = []
+    for e in expenses_in(store, start, end):
+        if person in e["members"]:
+            rows.append((e["date"], e["id"], e.get("memo", ""), e["amount"], expense_shares(e)[person]))
+    return rows
 
 
 def exclude_member(store, eid, name):
     """특정 지출에서 특정 사람을 뺀다(그 사람 몫을 남은 사람이 나눈다)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    e = store.get_expense(eid)
+    if e.get("deleted"):
+        raise ValueError(f"삭제된 지출입니다: {e['id']}번")
+    # 규약 6절: 확정한 기간의 지출은 수정할 수 없다.
+    if is_locked(store, e["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 고칠 수 없습니다: {e['date']}")
+    if name not in e["members"]:
+        raise ValueError(f"{e['id']}번 지출의 참여자가 아닙니다: {name}")
+    if len(e["members"]) == 1:
+        raise ValueError(f"참여자가 한 명뿐이라 뺄 수 없습니다: {name}")
+    # 규격 4-4 2번: members·weights 에서 빼고 수정 이력에 "exclude" 로 남긴다.
+    before = copy.deepcopy(e)
+    e["members"] = [m for m in e["members"] if m != name]
+    if e.get("weights"):
+        e["weights"] = {m: w for m, w in e["weights"].items() if m != name}
+    store.record("exclude", e["id"], before, e)
+    return e
 
 
 def compare(old_rows, new_rows):
     """이전 정산과 비교: {이름: (이전 잔액, 지금 잔액, 차이)}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 순서: 지금 정산(명부 순서) 다음에 이전 정산에만 있는 사람. 한쪽에 없으면 잔액 0, 차이 = 지금 - 이전.
+    names = list(new_rows) + [name for name in old_rows if name not in new_rows]
+    result = {}
+    for name in names:
+        before = old_rows[name]["balance"] if name in old_rows else 0
+        now = new_rows[name]["balance"] if name in new_rows else 0
+        result[name] = (before, now, now - before)
+    return result
 
 
 def add_recurring(store, day, payer, amount, members, memo, start_month):

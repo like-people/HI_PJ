@@ -28,8 +28,50 @@ def export_json(store, path, start=None, end=None, category=None):
 
 
 def file_total(path):
-    """내보낸 파일의 금액 합계와 건수."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """내보낸 파일의 금액 합계와 건수를 반환한다: (건수, 합계)."""
+    if str(path).lower().endswith(".json"):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            rows = data.get("expenses", [])
+        elif isinstance(data, list):
+            rows = data
+        else:
+            raise ValueError("JSON 파일 형식이 올바르지 않습니다")
+
+        rows = [
+            row for row in rows
+            if not row.get("deleted", False)
+        ]
+
+        total = 0
+        for row in rows:
+            if "amount" not in row:
+                raise ValueError("JSON 거래에 amount 필드가 없습니다")
+            total += money.to_won(row["amount"])
+
+        return len(rows), total
+
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        if reader.fieldnames is None or "amount" not in reader.fieldnames:
+            raise ValueError("CSV 파일에 amount 열이 없습니다")
+
+        count = 0
+        total = 0
+
+        for row in reader:
+            if not row:
+                continue
+
+            amount = row.get("amount", "").strip()
+
+            count += 1
+            total += money.to_won(amount)
+
+    return count, total
 
 
 def verify_export(store, path, start=None, end=None, category=None):
