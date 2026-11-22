@@ -46,30 +46,6 @@ def add_parser(sub, period_args):
     return grp
 
 
-def add_parser(sub, period_args):
-    grp = sub.add_parser(GROUP, help="지출 입력·관리").add_subparsers(dest="cmd")
-
-    add = grp.add_parser("add", help="지출 추가")
-    _expense_fields(add, required=True)
-    add.set_defaults(memo="")
-    add.add_argument("--weights", help="분담 비율(예: 김민수=2;이서연=1)")
-
-    listing = grp.add_parser("list", help="지출 목록")
-    listing.add_argument("--order", choices=("id", "date"), default="id", help="정렬 기준")
-
-    edit = grp.add_parser("edit", help="지출 수정", argument_default=argparse.SUPPRESS)
-    edit.add_argument("eid", type=int, help="지출 번호")
-    _expense_fields(edit)
-    weights = edit.add_mutually_exclusive_group()
-    weights.add_argument("--weights", help="새 분담 비율(예: 김민수=2;이서연=1)")
-    weights.add_argument("--equal", dest="weights", action="store_const", const=None,
-                         help="균등 분배로 변경")
-
-    delete = grp.add_parser("delete", help="지출 삭제")
-    delete.add_argument("eid", type=int, help="지출 번호")
-    return grp
-
-
 def run(c, args, cfg, store, out):
     if c == "add":
         expense, warnings = expenses.add_expense(
