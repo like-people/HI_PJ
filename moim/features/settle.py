@@ -115,7 +115,15 @@ def lock_period(store, start, end):
 
 def statement(store, start, end, person):
     """정산 내역서: 그 사람이 어떤 지출에 얼마를 부담했는지. [(날짜, 번호, 메모, 지출 금액, 내 부담액)]"""
-    raise NotImplementedError("이 함수를 구현한다")
+    if store.member(person) is None:
+        raise ValueError(f"명부에 없는 사람입니다: {person}")
+    # 부담액은 balances·member_shares 와 같은 expense_shares 로 계산해 내역서 합 = 그 사람의 owed 가 되게 한다.
+    # 참여자인 지출만 넣는다(낸 사람이어도 참여자가 아니면 부담이 없으므로 넣지 않는다). 순서는 expenses_in(날짜 → 번호).
+    rows = []
+    for e in expenses_in(store, start, end):
+        if person in e["members"]:
+            rows.append((e["date"], e["id"], e.get("memo", ""), e["amount"], expense_shares(e)[person]))
+    return rows
 
 
 def exclude_member(store, eid, name):
