@@ -71,7 +71,8 @@ def add_expense(store, date, payer, amount, members, memo="", weights=None, cate
         store, date, payer, amount, members, memo=memo, weights=weights, category=category,
     )
     return expense, []
-    
+
+
 def list_expenses(store, order="id", include_deleted=False):
     """지출을 번호순 또는 날짜순으로 돌려준다."""
     if order not in ("id", "date"):
@@ -120,6 +121,7 @@ def delete_expense(store, eid):
         store.record("delete", expense["id"], expense, updated)
         expense["deleted"] = True
     return expense
+
 
 def restore_expense(store, eid):
     raise NotImplementedError("이 함수를 구현한다")
