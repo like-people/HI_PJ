@@ -442,5 +442,92 @@ class ReportQuery(StoreCase):
         self.assertEqual(self.ids(min_amount=8000, max_amount=1000), [])
 
 
+class ReportText(StoreCase):
+    def put(self, eid, date, payer, amount, category=None, memo="", deleted=None):
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(NAMES), "category": category, "memo": memo}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def fill(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-10-05", kim, 3000, "식비", "10월 점심")
+        self.put(2, "2026-11-12", lee, 6000, "식비", "점심 식대")
+        self.put(3, "2026-11-13", kim, 9000, "교통", "택시")
+        self.put(4, "2026-11-14", park, 500, "식비", "삭제됨", deleted=True)
+        self.put(5, "2026-11-20", park, 2400)
+
+    def test_title_and_total(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("2026-11 월별 보고서 (2026-11-01 ~ 2026-11-30)", text)
+        self.assertIn("합계: 17,400원 (3건)", text)
+
+    def test_total_matches_period_total(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        total = queries.period_total(self.store, "2026-11-01", "2026-11-30")
+        self.assertIn(f"합계: {total:,}원", text)
+
+    def test_has_all_sections(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        for part in ["[분류별]", "[사람별 낸 돈]", "[요일별]", "[큰 지출 5건]",
+                     "가장 많이 쓴 날: 2026-11-13 (9,000원)"]:
+            self.assertIn(part, text)
+
+    def test_month_over_month_line(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("전월 대비: 지난달 3,000원, +14,400원 (+480%)", text)
+
+    def test_no_last_month_message(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-10")
+        self.assertIn("지난달 지출이 없어 비교하지 않습니다", text)
+
+    def test_deleted_expense_skipped(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertNotIn("삭제됨", text)
+
+    def test_uncategorized_label(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("미분류", text)
+
+    def test_empty_month(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-12")
+        self.assertIn("이 달에는 지출이 없습니다.", text)
+        self.assertNotIn("[분류별]", text)
+
+    def test_bad_month_raises(self):
+        with self.assertRaises(ValueError):
+            report.month_report(self.store, "2026-13")
+
+    def test_save_report_writes_file(self):
+        path = self.path("r.txt")
+        got = report.save_report("안녕\n둘째 줄", path)
+        self.assertEqual(got, path)
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "안녕\n둘째 줄\n")
+
+    def test_save_report_single_trailing_newline(self):
+        path = self.path("r.txt")
+        report.save_report("끝\n", path)
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "끝\n")
+
+    def test_save_report_rejects_non_txt(self):
+        with self.assertRaises(ValueError):
+            report.save_report("x", self.path("r.csv"))
+
+    def test_save_report_missing_folder(self):
+        with self.assertRaises(FileNotFoundError):
+            report.save_report("x", self.path("없는폴더/r.txt"))
+            
+            
 if __name__ == "__main__":
     unittest.main()

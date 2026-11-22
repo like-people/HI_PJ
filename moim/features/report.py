@@ -107,13 +107,56 @@ def biggest_day(store, start, end):
     return day, by_day[day]
 
 
+# 담당: 기능 3(류훈태)
 def month_report(store, month):
-    raise NotImplementedError("이 함수를 구현한다")
+    """한 달 보고서 문자열. 합계, 전월 대비, 분류별, 사람별, 요일별, 큰 지출, 가장 많이 쓴 날을 담는다."""
+    year, mon = dates.parse_month(month)
+    key = f"{year:04d}-{mon:02d}"
+    start, end = dates.month_range(year, mon)
+    summary = period_summary(store, start, end)
+    items = expenses_in(store, start, end)
+    lines = [f"{key} 월별 보고서 ({dates.fmt(start)} ~ {dates.fmt(end)})", ""]
+    if not items:
+        lines.append("이 달에는 지출이 없습니다.")
+        return "\n".join(lines)
+
+    this_total, last_total, change, percent = month_over_month(store, key)
+    lines.append(f"합계: {money.fmt(summary['total'])}원 ({len(items)}건)")
+    if last_total == 0:
+        lines.append("전월 대비: 지난달 지출이 없어 비교하지 않습니다.")
+    else:
+        lines.append(f"전월 대비: 지난달 {money.fmt(last_total)}원, {change:+,}원 ({percent:+d}%)")
+
+    cats = category_totals(store, start, end)
+    lines += ["", "[분류별]"]
+    lines.append(table(["분류", "건수", "금액"],
+                       [[name, v["count"], v["amount"]] for name, v in cats.items()],
+                       total=["합계", len(items), summary["total"]], numeric={1, 2}))
+    lines += ["", bar_chart(summary["by_category"])]
+
+    lines += ["", "[사람별 낸 돈]"]
+    lines.append(table(["이름", "낸 돈"], [[name, v] for name, v in summary["by_person"].items()], numeric={1}))
+
+    lines += ["", "[요일별]", bar_chart(weekday_totals(store, start, end))]
+
+    lines += ["", "[큰 지출 5건]"]
+    lines.append(table(["날짜", "번호", "메모", "금액"],
+                       [[e["date"], e["id"], e.get("memo") or "", e["amount"]] for e in top_expenses(store, start, end)],
+                       numeric={3}))
+
+    day, amount = biggest_day(store, start, end)
+    lines += ["", f"가장 많이 쓴 날: {day} ({money.fmt(amount)}원)"]
+    return "\n".join(lines)
 
 
+# 담당: 기능 3(류훈태)
 def save_report(text, path):
     """보고서를 텍스트 파일(.txt)로 저장한다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    if not str(path).lower().endswith(".txt"):
+        raise ValueError(f"보고서는 .txt 파일로 저장합니다: {path}")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text if text.endswith("\n") else text + "\n")
+    return path
 
 
 # 담당: 기능 3(류훈태)
