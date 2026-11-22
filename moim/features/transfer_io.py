@@ -10,6 +10,8 @@
 필요하면 함수를 더 만들어도 된다. 다른 기능 파일은 불러 쓰지 않는다.
 """
 
+import os
+import tempfile
 import csv
 import copy
 import json
@@ -91,11 +93,49 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
 
 def backup_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """현재 모임 자료 전체를 JSON 백업 파일로 저장한다."""
+
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=directory,
+            prefix=".moim-backup-",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            temp_path = f.name
+            json.dump(store.data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(temp_path, path)
+        temp_path = None
+
+    finally:
+        if temp_path is not None and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 def restore_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """JSON 백업 파일을 읽어 현재 모임 자료 전체를 메모리에 복원한다.
+    실제 자료 파일 저장은 호출 측에서 복원 성공을 확인한 뒤
+    Store.save()를 호출해 처리한다."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError("백업 파일 형식이 올바르지 않습니다")
+
+    store._check_shape(data)
+    store.data = copy.deepcopy(data)
+
+    return store
 
 
 def merge(store, other_path):
