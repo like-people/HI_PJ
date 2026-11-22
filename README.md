@@ -126,18 +126,6 @@ python -m moim cat rules
 ```
 `--priority`, `--payer`, `--min-amount`, `--max-amount` 로 우선순위와 조건을 더할 수 있습니다.
 
-### 다시 분류와 직접 정하기: `cat apply`, `cat set`, `cat unfix`
-`cat apply` 는 모든 지출을 규칙대로 다시 분류하고, `--preview` 를 붙이면 바꾸지 않고 몇 건이 바뀔지만 보여 줍니다. 분류를 직접 정한(`cat set`) 지출과 정산이 확정된 기간의 지출은 `cat apply` 가 바꾸지 않으며, `cat unfix 번호` 로 고정을 풉니다.
-
-```
-python -m moim cat apply --preview
-python -m moim cat set 4 기타
-```
-```
-0건 바뀔 예정
-4번 분류를 기타(으)로 정했습니다
-```
-
 ### 살펴보기: `cat uncategorized`, `cat summary`, `cat overlaps`
 분류가 없는 지출, 분류별 건수와 금액, 같은 키워드가 서로 다른 분류의 규칙에 함께 들어 있는 경우를 보여 줍니다. `summary` 는 `--month` 또는 `--start`, `--end` 로 기간을 줍니다.
 
@@ -152,6 +140,29 @@ python -m moim cat overlaps
 식비 1건 6,000원
 미분류 1건 2,400원
 겹치는 키워드가 없습니다
+```
+
+### 다시 분류와 직접 정하기: `cat apply`, `cat set`, `cat unfix`
+`cat apply` 는 모든 지출을 규칙대로 다시 분류하고, `--preview` 를 붙이면 바꾸지 않고 몇 건이 바뀔지만 보여 줍니다. 분류를 직접 정한(`cat set`) 지출과 정산이 확정된 기간의 지출은 `cat apply` 가 바꾸지 않으며, `cat unfix 번호` 로 고정을 풉니다.
+
+위 "살펴보기"의 명령을 먼저 실행한 뒤에 따라 치세요. `cat set` 을 하고 나면 4번 지출에 분류가 생겨서 `cat uncategorized`, `cat summary` 결과가 달라집니다.
+
+```
+python -m moim cat apply --preview
+python -m moim cat set 4 기타
+```
+```
+0건 바뀔 예정
+4번 분류를 기타(으)로 정했습니다
+```
+
+없는 지출 번호를 주면 한 줄로 이유를 알려 주고 종료 코드 1 로 끝납니다.
+
+```
+python -m moim cat set 99 기타
+```
+```
+오류: 없는 지출 번호입니다: 99
 ```
 
 ## 개발자용
