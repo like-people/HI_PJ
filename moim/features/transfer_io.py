@@ -11,6 +11,7 @@
 """
 
 import csv
+import copy
 import json
 from ..common import dates, ledger, money
 from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
@@ -81,6 +82,14 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
 def import_csv(store, path, mapping=None, encoding=None, preview=False):
     """CSV 지출을 가져온다. 돌려주는 값: {"encoding", "added": [번호], "duplicates": [줄 번호], "errors": [(줄 번호, 오류)]}
     preview=True 면 실제로 넣지 않고 검사만 한다. 이때 added 에는 들어갈 줄 번호가 담긴다."""
+    raise NotImplementedError("이 함수를 구현한다")
+
+
+def backup_all(store, path):
+    raise NotImplementedError("이 함수를 구현한다")
+
+
+def restore_all(store, path):
     raise NotImplementedError("이 함수를 구현한다")
 
 
