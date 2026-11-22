@@ -127,7 +127,71 @@ def verify_export(store, path, start=None, end=None, category=None):
 
 def roundtrip_check(store, path, start=None, end=None, category=None):
     """내보낸 파일을 다시 읽어 원래 기록과 똑같은지 대조. 다른 번호 목록을 돌려준다(비어 있으면 같음)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    start_date = start or "0001-01-01"
+    end_date = end or "9999-12-31"
+    expenses = expenses_in(store, start_date, end_date)
+
+    if category is not None:
+        expenses = [
+            e for e in expenses
+            if category_of(e) == category
+        ]
+
+    # CSV로 내보내기
+    export_csv(store, path, start, end, category)
+
+    # 원본 지출을 CSV 형식 문자열로 변환해 비교 기준 생성
+    expected = {}
+    for e in expenses:
+        members = e["members"]
+        weights = e.get("weights")
+
+        expected[str(e["id"])] = [
+            str(e["id"]),
+            e["date"],
+            e["payer"],
+            str(e["amount"]),
+            ";".join(members),
+            (
+                ";".join(f"{name}:{weights[name]}" for name in members)
+                if weights else ""
+            ),
+            e.get("category") or "",
+            e.get("memo") or "",
+        ]
+
+    # 내보낸 CSV 다시 읽기
+    actual = {}
+    duplicate_ids = set()
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            eid = row["id"]
+
+            if eid in actual:
+                duplicate_ids.add(eid)
+                continue
+
+            actual[eid] = [
+                row["id"],
+                row["date"],
+                row["payer"],
+                row["amount"],
+                row["members"],
+                row["weights"],
+                row["category"],
+                row["memo"],
+            ]
+
+    # 값이 다르거나 누락·추가·중복된 지출 ID 반환
+    different = set(duplicate_ids)
+    all_ids = set(expected) | set(actual)
+
+    for eid in all_ids:
+        if expected.get(eid) != actual.get(eid):
+            different.add(eid)
+
+    return sorted(different)
 
 
 def import_csv(store, path, mapping=None, encoding=None, preview=False):
