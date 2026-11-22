@@ -82,12 +82,54 @@ class PeriodAndMonthly(ReportCommandCase):
         before = self.data_text()
         self.report("period", "--month", "2026-11")
         self.report("monthly", "2026-10", "2026-11")
+        self.report("month", "2026-11")
+        self.report("search", "--word", "점심")
         self.assertEqual(self.data_text(), before)
 
     def test_no_subcommand_shows_usage(self):
         code, text = self.report()
         self.assertEqual(code, 0)
         self.assertIn("사용법: report", text)
+
+
+class MonthCommand(ReportCommandCase):
+    def test_month_prints_report(self):
+        code, text = self.report("month", "2026-11")
+        self.assertEqual(code, 0)
+        self.assertIn("2026-11 월별 보고서 (2026-11-01 ~ 2026-11-30)", text)
+        self.assertIn("합계: 17,400원 (3건)", text)
+
+    def test_month_bad_month_is_error(self):
+        code, text = self.report("month", "2026-13")
+        self.assertEqual(code, 1)
+        self.assertTrue(text.startswith("오류: "))
+
+    def test_month_empty(self):
+        code, text = self.report("month", "2026-12")
+        self.assertEqual(code, 0)
+        self.assertIn("이 달에는 지출이 없습니다.", text)
+
+
+class SearchCommand(ReportCommandCase):
+    def test_search_word_and_total_row(self):
+        code, text = self.report("search", "--word", "점심")
+        self.assertEqual(code, 0)
+        self.assertIn("10월 점심", text)
+        self.assertIn("점심 식대", text)
+        self.assertNotIn("택시", text)
+        self.assertIn("9,000", text)
+
+    def test_search_amount_range_and_month(self):
+        code, text = self.report("search", "--month", "2026-11", "--min-amount", "6,000", "--max-amount", "6000")
+        self.assertIn("점심 식대", text)
+        self.assertNotIn("택시", text)
+
+    def test_search_person(self):
+        code, text = self.report("search", "--person", NAMES[2], "--word", "택시")
+        self.assertIn("택시", text)
+
+    def test_search_nothing_found(self):
+        self.assertEqual(self.report("search", "--word", "없는낱말"), (0, "찾은 지출이 없습니다."))
 
 
 if __name__ == "__main__":
