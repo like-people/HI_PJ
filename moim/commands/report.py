@@ -19,13 +19,25 @@ def add_parser(sub, period_args):
 
     s = grp.add_parser("month", help="한 달 보고서")
     s.add_argument("month", help="YYYY-MM")
+    s.add_argument("--save", metavar="파일.txt", help="화면 대신 텍스트 파일(.txt)로 저장")
 
     s = grp.add_parser("period", help="기간 보고서")
     period_args(s)
+    s.add_argument("--save", metavar="파일.txt", help="화면 대신 텍스트 파일(.txt)로 저장")
 
     s = grp.add_parser("monthly", help="달별 합계")
     s.add_argument("start_month", help="YYYY-MM")
     s.add_argument("end_month", help="YYYY-MM")
+
+    s = grp.add_parser("weekday", help="요일별 합계")
+    period_args(s)
+
+    s = grp.add_parser("week", help="주별 합계(월요일 시작)")
+    period_args(s)
+
+    s = grp.add_parser("top", help="금액이 큰 지출")
+    period_args(s)
+    s.add_argument("-n", "--count", type=int, default=5, help="보여 줄 건수(기본 5)")
 
     s = grp.add_parser("search", help="지출 검색")
     period_args(s)
@@ -34,6 +46,14 @@ def add_parser(sub, period_args):
     s.add_argument("--max-amount", help="이 금액 이하")
     s.add_argument("--word", help="메모에 들어 있는 낱말")
     return grp
+
+
+def _show(text, args, out):
+    """--save 가 있으면 파일로 저장하고 알리고, 없으면 화면에 보인다."""
+    if args.save:
+        out(f"저장했습니다: {feat.save_report(text, args.save)}")
+    else:
+        out(text)
 
 
 def _range(args):
@@ -70,19 +90,28 @@ def _period_text(store, first, last):
 
 def run(c, args, cfg, store, out):
     if c == "month":
-        out(feat.month_report(store, args.month))
+        _show(feat.month_report(store, args.month), args, out)
     elif c == "period":
-        out(_period_text(store, *_range(args)))
+        _show(_period_text(store, *_range(args)), args, out)
     elif c == "monthly":
         totals = feat.monthly_totals(store, args.start_month, args.end_month)
         if not totals:
             raise ValueError("시작 달이 끝 달보다 늦습니다")
         out(table(["달", "합계"], list(totals.items()), total=["합계", sum(totals.values())], numeric={1}))
         out(bar_chart(totals))
+    elif c == "weekday":
+        out(bar_chart(feat.weekday_totals(store, *_range(args))))
+    elif c == "week":
+        out(table(["주(월요일)", "합계"], list(feat.week_totals(store, *_range(args)).items()), numeric={1}))
+    elif c == "top":
+        if args.count < 1:
+            raise ValueError("건수는 1 이상이어야 합니다")
+        items = feat.top_expenses(store, *_range(args), n=args.count)
+        out(_expense_table(items) if items else "지출이 없습니다.")
     elif c == "search":
         start, end = _range(args) if args.month else (args.start, args.end)
         items = feat.search(store, start, end, args.person, args.min_amount, args.max_amount, args.word)
         out(_expense_table(items) if items else "찾은 지출이 없습니다.")
     else:
-        out("사용법: report month|period|monthly|search  (자세한 것은 report <명령> --help)")
+        out("사용법: report month|period|monthly|weekday|week|top|search  (자세한 것은 report <명령> --help)")
     return False
