@@ -55,5 +55,20 @@ class TransferIOTests(unittest.TestCase):
         )
         self.assertEqual(file_total(path), (2, 1500))
 
+    def test_file_total_json_missing_amount(self):
+        path = self.root / "expenses.json"
+        data = {
+            "expenses": [
+                {"payer": "철수"},
+            ]
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError):
+            file_total(path)
+
 if __name__ == "__main__":
     unittest.main()

@@ -45,7 +45,12 @@ def file_total(path):
             if not row.get("deleted", False)
         ]
 
-        total = sum(money.to_won(row["amount"]) for row in rows)
+        total = 0
+        for row in rows:
+            if "amount" not in row:
+                raise ValueError("JSON 거래에 amount 필드가 없습니다")
+            total += money.to_won(row["amount"])
+
         return len(rows), total
 
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
