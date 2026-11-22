@@ -17,12 +17,56 @@ import copy
 import json
 from ..common import dates, ledger, money
 from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
-from ..common.queries import active_members, expenses_in
+from ..common.queries import active_members, expenses_in, category_of
 
 
 def export_csv(store, path, start=None, end=None, category=None):
     """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
-    raise NotImplementedError("이 함수를 구현한다")
+    start_date = start or "0001-01-01"
+    end_date = end or "9999-12-31"
+    expenses = expenses_in(store, start_date, end_date)
+
+    if category is not None:
+        expenses = [
+            e for e in expenses
+            if category_of(e) == category
+        ]
+
+    headers = [
+        "id", "date", "payer", "amount",
+        "members", "weights", "category", "memo",
+    ]
+
+    total = 0
+
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+
+        for e in expenses:
+            members = e["members"]
+            weights = e.get("weights")
+
+            members_text = ";".join(members)
+            weights_text = (
+                ";".join(f"{name}:{weights[name]}" for name in members)
+                if weights else ""
+            )
+
+            writer.writerow([
+                e["id"],
+                e["date"],
+                e["payer"],
+                e["amount"],
+                members_text,
+                weights_text,
+                e.get("category") or "",
+                e.get("memo") or "",
+            ])
+
+            total += e["amount"]
+
+    return len(expenses), total
 
 
 def export_json(store, path, start=None, end=None, category=None):
