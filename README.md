@@ -105,6 +105,55 @@ python -m moim report period --start 2026-11-20 --end 2026-11-10
 오류: 시작일이 끝일보다 늦습니다
 ```
 
+## 분류 규칙 (`cat`)
+지출을 `식비`, `교통` 같은 분류로 나누는 규칙을 관리합니다. 규칙은 설정의 `rules` 파일에 저장되고, 지출의 메모에 키워드가 하나라도 들어 있으면 그 분류로 정하고, 맞는 규칙이 여럿이면 우선순위가 높은 규칙을 따릅니다. 아래 예는 보고서 절의 지출 4건을 그대로 씁니다.
+
+### 규칙 추가와 목록: `cat add-rule`, `cat rules`
+분류 이름 뒤에 `--keywords` 로 키워드를 `;` 로 이어서 줍니다. 앞의 번호는 `cat remove-rule 번호` 에 쓰입니다.
+
+```
+python -m moim cat rules
+python -m moim cat add-rule 식비 --keywords "점심;식대"
+python -m moim cat add-rule 교통 --keywords "택시;버스"
+python -m moim cat rules
+```
+```
+규칙이 없습니다
+규칙을 추가했습니다: 식비
+규칙을 추가했습니다: 교통
+1. 식비 | 키워드: 점심;식대 | 우선순위 0
+2. 교통 | 키워드: 택시;버스 | 우선순위 0
+```
+`--priority`, `--payer`, `--min-amount`, `--max-amount` 로 우선순위와 조건을 더할 수 있습니다.
+
+### 다시 분류와 직접 정하기: `cat apply`, `cat set`, `cat unfix`
+`cat apply` 는 모든 지출을 규칙대로 다시 분류하고, `--preview` 를 붙이면 바꾸지 않고 몇 건이 바뀔지만 보여 줍니다. 분류를 직접 정한(`cat set`) 지출과 정산이 확정된 기간의 지출은 `cat apply` 가 바꾸지 않으며, `cat unfix 번호` 로 고정을 풉니다.
+
+```
+python -m moim cat apply --preview
+python -m moim cat set 4 기타
+```
+```
+0건 바뀔 예정
+4번 분류를 기타(으)로 정했습니다
+```
+
+### 살펴보기: `cat uncategorized`, `cat summary`, `cat overlaps`
+분류가 없는 지출, 분류별 건수와 금액, 같은 키워드가 서로 다른 분류의 규칙에 함께 들어 있는 경우를 보여 줍니다. `summary` 는 `--month` 또는 `--start`, `--end` 로 기간을 줍니다.
+
+```
+python -m moim cat uncategorized
+python -m moim cat summary --month 2026-11
+python -m moim cat overlaps
+```
+```
+4번 2026-11-20 박지훈 2,400원
+교통 1건 9,000원
+식비 1건 6,000원
+미분류 1건 2,400원
+겹치는 키워드가 없습니다
+```
+
 ## 개발자용
 ```
 python -m unittest discover -s tests          # 전체 테스트
