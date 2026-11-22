@@ -1,6 +1,6 @@
 import csv
 
-from tests.helpers import StoreCase, NAMES
+from helpers import StoreCase, NAMES
 from moim.features.transfer_io import export_csv
 
 
