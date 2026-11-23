@@ -20,10 +20,11 @@ from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
 from ..common.queries import active_members, expenses_in, category_of
 
 
-def export_csv(store, path, start=None, end=None, category=None):
-    """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
+def _filtered_expenses(store, start=None, end=None, category=None):
+    """기간과 분류 조건에 맞는 지출 목록을 반환한다."""
     start_date = start or "0001-01-01"
     end_date = end or "9999-12-31"
+
     expenses = expenses_in(store, start_date, end_date)
 
     if category is not None:
@@ -31,6 +32,13 @@ def export_csv(store, path, start=None, end=None, category=None):
             e for e in expenses
             if category_of(e) == category
         ]
+
+    return expenses
+
+
+def export_csv(store, path, start=None, end=None, category=None):
+    """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
+    expenses = _filtered_expenses(store, start, end, category)
 
     headers = [
         "id", "date", "payer", "amount",
@@ -129,16 +137,7 @@ def file_total(path):
 
 def verify_export(store, path, start=None, end=None, category=None):
     """내보낸 파일 합계가 원래 기록 합계와 같은가. 돌려주는 값: (같은가, 파일 합계, 기록 합계)"""
-    start_date = start or "0001-01-01"
-    end_date = end or "9999-12-31"
-
-    expenses = expenses_in(store, start_date, end_date)
-
-    if category is not None:
-        expenses = [
-            e for e in expenses
-            if category_of(e) == category
-        ]
+    expenses = _filtered_expenses(store, start, end, category)
 
     record_total = sum(e["amount"] for e in expenses)
 
