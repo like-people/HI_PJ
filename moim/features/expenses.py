@@ -96,7 +96,8 @@ def load_members_file(store, path):
 
 
 def list_members(store):
-    raise NotImplementedError("이 함수를 구현한다")
+    """명부 순서의 회원 목록. 돌려주는 값: [{"name", "joined", "left"}] 사본(바꿔도 명부는 그대로)."""
+    return [dict(member) for member in store.data["members"]]
 
 
 def add_expense(store, date, payer, amount, members, memo="", weights=None, category=None):
