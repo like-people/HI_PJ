@@ -52,7 +52,53 @@ class LoadMembersFile(StoreCase):
         added, left, errors = load_members_file(self.store, path)
         self.assertEqual(added, ["최하나", "한가온"])
         self.assertEqual([no for no, _ in errors], [2, 3, 4])
+        
+    def add_expense(self, date, payer="김민수", members=("김민수", "이서연")):
+        eid = self.store.new_id()
+        self.store.data["expenses"].append(
+            {"id": eid, "date": date, "payer": payer, "amount": 3000, "members": list(members),
+             "category": None, "memo": "", "deleted": False})
+        return eid
 
+    def test_left_date_before_later_expense_is_error(self):
+        eid = self.add_expense("2026-11-20")
+        path = self.write("이서연,2026-09-01,2026-11-15\n")
+        added, left, errors = load_members_file(self.store, path)
+        self.assertEqual((added, left), ([], []))
+        self.assertEqual([no for no, _ in errors], [1])
+        self.assertIn(f"{eid}번", errors[0][1])
+        self.assertIsNone(self.member("이서연")["left"])
+
+    def test_left_date_on_last_expense_day_is_ok(self):
+        self.add_expense("2026-11-20")
+        path = self.write("이서연,2026-09-01,2026-11-20\n")
+        added, left, errors = load_members_file(self.store, path)
+        self.assertEqual((left, errors), (["이서연"], []))
+        self.assertEqual(self.member("이서연")["left"], "2026-11-20")
+
+    def test_deleted_expense_does_not_block_left_date(self):
+        eid = self.add_expense("2026-11-20")
+        self.store.get_expense(eid)["deleted"] = True
+        path = self.write("이서연,2026-09-01,2026-11-15\n")
+        added, left, errors = load_members_file(self.store, path)
+        self.assertEqual((left, errors), (["이서연"], []))
+
+    def test_payer_only_expense_also_blocks_left_date(self):
+        self.add_expense("2026-11-20", payer="이서연", members=("김민수",))
+        path = self.write("이서연,2026-09-01,2026-11-15\n")
+        added, left, errors = load_members_file(self.store, path)
+        self.assertEqual(left, [])
+        self.assertEqual([no for no, _ in errors], [1])
+
+    def test_blocked_line_skipped_and_other_lines_applied(self):
+        self.add_expense("2026-11-20")
+        path = self.write("이서연,2026-09-01,2026-11-15\n박지훈,2026-09-01,2026-11-15\n최하나,2026-10-01\n")
+        added, left, errors = load_members_file(self.store, path)
+        self.assertEqual((added, left), (["최하나"], ["박지훈"]))
+        self.assertEqual([no for no, _ in errors], [1])
+        self.assertIsNone(self.member("이서연")["left"])
+        self.assertEqual(self.member("박지훈")["left"], "2026-11-15")
+        
     def test_utf8_bom_file(self):
         path = self.path("bom.txt")
         with open(path, "w", encoding="utf-8-sig") as f:
