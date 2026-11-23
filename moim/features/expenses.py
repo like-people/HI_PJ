@@ -124,7 +124,22 @@ def delete_expense(store, eid):
 
 
 def restore_expense(store, eid):
-    raise NotImplementedError("이 함수를 구현한다")
+    """삭제 표시한 지출을 되살리고 변경 이력을 기록한다. 삭제되지 않은 지출이면 그대로 돌려준다.
+    확정된 날짜이거나, 지금 명부로 다시 검사(ledger.validate)해 통과하지 못하면 ValueError(자료는 그대로)."""
+    expense = store.get_expense(eid)
+    if is_locked(store, expense["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 되살릴 수 없습니다: {expense['date']}")
+
+    if expense.get("deleted", False):
+        try:
+            ledger.validate(store, expense["date"], expense["payer"], expense["amount"],
+                            expense["members"], expense.get("weights"))
+        except ValueError as exc:
+            raise ValueError(f"{expense['id']}번 지출을 되살릴 수 없습니다: {exc}") from None
+        updated = {**expense, "deleted": False}
+        store.record("restore", expense["id"], expense, updated)
+        expense["deleted"] = False
+    return expense
 
 
 def undo_last_edit(store, eid):
