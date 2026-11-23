@@ -29,11 +29,11 @@ class TestBudgetExtendedCommands(StoreCase):
 
     def test_category_table_and_unset(self):
         self.cfg["budget"]["by_category"] = {"식비": 50000, "교통": None}
-        self._add_expense("2026-11-10", 40000, category="식비")
+        self._add_expense("2026-11-10", 40001, category="식비")
         changed, text = self._run("budget", "category", "--month", "2026-11")
         self.assertFalse(changed)
         self.assertIn("식비", text)
-        self.assertIn("40,000", text)
+        self.assertIn("40,001", text)
         self.assertIn("경고", text)
         self.assertIn("교통", text)
         self.assertIn("미설정", text)
