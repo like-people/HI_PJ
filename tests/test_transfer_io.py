@@ -87,6 +87,21 @@ class TransferIOTests(unittest.TestCase):
 
         self.assertEqual(file_total(path), (0, 0))
 
+    def test_file_total_json_missing_expenses_key(self):
+        path = self.root / "missing_expenses.json"
+        data = {
+            "items": [
+                {"amount": 1000},
+            ]
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError):
+            file_total(path)
+
     def test_file_total_json_list_format(self):
         path = self.root / "list.json"
         data = [
@@ -99,6 +114,7 @@ class TransferIOTests(unittest.TestCase):
         )
 
         self.assertEqual(file_total(path), (2, 3500))
+
 
 if __name__ == "__main__":
     unittest.main()

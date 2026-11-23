@@ -34,7 +34,11 @@ def file_total(path):
             data = json.load(f)
 
         if isinstance(data, dict):
-            rows = data.get("expenses", [])
+            if "expenses" not in data:
+                raise ValueError("JSON 파일에 expenses 필드가 없습니다")
+            rows = data["expenses"]
+            if not isinstance(rows, list):
+                raise ValueError("JSON 파일의 expenses 형식이 올바르지 않습니다")
         elif isinstance(data, list):
             rows = data
         else:
