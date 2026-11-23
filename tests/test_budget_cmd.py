@@ -1,4 +1,4 @@
-﻿"""명령 묶음 `budget` 기본 필수 명령(status·pay·balance) 테스트. 담당: 기능 5(이정배)."""
+"""명령 묶음 `budget` 기본 필수 명령(status·pay·balance) 테스트. 담당: 기능 5(이정배)."""
 
 import unittest
 
