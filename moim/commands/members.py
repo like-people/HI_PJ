@@ -6,6 +6,7 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 """
 
 from ..features.expenses import load_members_file
+from ..features import expenses as feat
 
 GROUP = 'member'
 
@@ -14,6 +15,9 @@ def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="참여자 명부").add_subparsers(dest="cmd")
     # 예: s = grp.add_parser("list"); s.add_argument("--order", default="id")
     #     기간을 받는 명령은 period_args(s) 로 --month, --start, --end 를 붙인다.
+    s = grp.add_parser("leave", help="회원 탈퇴(탈퇴일 당일까지 회원)")
+    s.add_argument("name", help="이름")
+    s.add_argument("--date", required=True, help="탈퇴일(YYYY-MM-DD)")
     s = grp.add_parser("load", help="명부 파일 읽기(설정의 members_file)")
     s.add_argument("--file", help="명부 파일(없으면 설정의 members_file)")
     return grp
@@ -21,6 +25,10 @@ def add_parser(sub, period_args):
 
 def run(c, args, cfg, store, out):
     # 예: if c == "list": ...; return False
+    if c == "leave":
+        member = feat.leave_member(store, args.name, args.date)
+        out(f"탈퇴를 기록했습니다: {member['name']} (탈퇴일 {member['left']})")
+        return True
     if c == "load":
         path = args.file or cfg.get("members_file", "members.txt")
         added, left, errors = load_members_file(store, path)
