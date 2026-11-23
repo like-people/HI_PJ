@@ -70,10 +70,11 @@ def _show(field, value):
 
 
 def _changes(entry):
-    """이력 한 건의 내용: 추가는 지출 요약, 그 밖에는 바뀐 항목 '이름 전→후'."""
+    """이력 한 건의 내용: 추가·삭제·되살리기는 지출 요약, 그 밖에는 바뀐 항목 '이름 전→후'."""
     before, after = entry.get("before") or {}, entry.get("after") or {}
-    if not before:
-        return " ".join(_show(f, after.get(f)) for f in ("date", "payer", "amount", "members"))
+    if not before or entry.get("action") in ("delete", "restore"):
+        src = after if not before else before
+        return " ".join(_show(f, src.get(f)) for f in ("date", "payer", "amount", "members"))
     parts = [f"{label} {_show(f, before.get(f))}→{_show(f, after.get(f))}"
              for f, label in _FIELDS.items() if before.get(f) != after.get(f)]
     return ", ".join(parts)
