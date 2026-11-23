@@ -19,7 +19,18 @@ from ..common.queries import is_locked
 
 
 def add_member(store, name, joined):
-    raise NotImplementedError("이 함수를 구현한다")
+    """명부에 회원을 추가한다. 돌려주는 값: 추가한 회원 {"name", "joined", "left": None}.
+    이름이 비었거나, 명령 인자의 구분자(, ; =)가 들어 있거나, 이미 명부에 있는 이름이면 ValueError."""
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("회원 이름이 비어 있습니다")
+    name = name.strip()
+    if any(ch in name for ch in ",;="):
+        raise ValueError(f"회원 이름에 쉼표(,)·세미콜론(;)·등호(=)는 쓸 수 없습니다: {name}")
+    if store.member(name) is not None:
+        raise ValueError(f"이미 명부에 있는 이름입니다: {name}")
+    member = {"name": name, "joined": dates.fmt(joined), "left": None}
+    store.data["members"].append(member)
+    return member
 
 
 def leave_member(store, name, left):

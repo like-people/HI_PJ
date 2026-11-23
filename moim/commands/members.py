@@ -6,12 +6,16 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 """
 
 from ..features.expenses import load_members_file
+from ..features import expenses as feat
 
 GROUP = 'member'
 
 
 def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="참여자 명부").add_subparsers(dest="cmd")
+    s = grp.add_parser("add", help="회원 추가")
+    s.add_argument("name", help="이름")
+    s.add_argument("--joined", required=True, help="가입일(YYYY-MM-DD)")
     # 예: s = grp.add_parser("list"); s.add_argument("--order", default="id")
     #     기간을 받는 명령은 period_args(s) 로 --month, --start, --end 를 붙인다.
     s = grp.add_parser("load", help="명부 파일 읽기(설정의 members_file)")
@@ -20,6 +24,10 @@ def add_parser(sub, period_args):
 
 
 def run(c, args, cfg, store, out):
+    if c == "add":
+        member = feat.add_member(store, args.name, args.joined)
+        out(f"회원을 추가했습니다: {member['name']} (가입일 {member['joined']})")
+        return True
     # 예: if c == "list": ...; return False
     if c == "load":
         path = args.file or cfg.get("members_file", "members.txt")
