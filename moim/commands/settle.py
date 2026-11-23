@@ -19,6 +19,11 @@ def add_parser(sub, period_args):
 
     s = grp.add_parser("balance", help="사람마다 낸 돈·부담·송금·잔액과 잔액 합계")
     period_args(s)
+
+    s = grp.add_parser("lock", help="정산 확정(이 기간의 지출은 더 이상 추가·수정·삭제할 수 없음)")
+    period_args(s)
+
+    grp.add_parser("locks", help="확정한 기간 목록")
     return grp
 
 
@@ -36,6 +41,25 @@ def run(c, args, cfg, store, out):
         out(f"잔액 합계: {total:,}")
         if total != 0:
             out("경고: 잔액 합계가 0이 아닙니다. 자료를 확인하십시오")
+        return False
+
+    if c == "lock":
+        start, end = _period(args)
+        before = len(store.data["locks"])
+        lock = feat.lock_period(store, start, end)
+        if len(store.data["locks"]) == before:
+            out(f"이미 확정한 기간입니다: {lock['start']} ~ {lock['end']}")
+            return False
+        out(f"정산을 확정했습니다: {lock['start']} ~ {lock['end']}")
+        return True
+
+    if c == "locks":
+        locks = store.data.get("locks", [])
+        if not locks:
+            out("확정한 기간이 없습니다")
+        else:
+            body = [[lk["start"], lk["end"]] for lk in sorted(locks, key=lambda lk: (lk["start"], lk["end"]))]
+            out(table(["시작일", "끝일"], body))
         return False
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
