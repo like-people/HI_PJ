@@ -345,5 +345,189 @@ class ReportCompare(StoreCase):
         self.assertEqual(report.week_totals(self.store, "2026-11-30", "2026-11-01"), {})
 
 
+class ReportQuery(StoreCase):
+    S, E = "2026-11-01", "2026-11-30"
+
+    def put(self, eid, date, payer, amount, members=None, memo="", deleted=None):
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(members or NAMES), "category": None, "memo": memo}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def fill(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-11-10", kim, 5000, memo="점심 식대")
+        self.put(2, "2026-11-10", lee, 7000, members=[lee, park], memo="커피")
+        self.put(3, "2026-11-12", park, 7000, members=[park], memo="점심")
+        self.put(4, "2026-11-13", kim, 99999, deleted=True)
+        self.put(5, "2026-12-01", kim, 100)
+
+    def ids(self, **kw):
+        return [e["id"] for e in report.search(self.store, **kw)]
+
+    def test_top_expenses_big_first_then_date_then_id(self):
+        self.fill()
+        got = report.top_expenses(self.store, self.S, self.E)
+        self.assertEqual([e["id"] for e in got], [2, 3, 1])
+
+    def test_top_expenses_limit_n(self):
+        self.fill()
+        self.assertEqual([e["id"] for e in report.top_expenses(self.store, self.S, self.E, 2)], [2, 3])
+
+    def test_top_expenses_zero_n_is_empty(self):
+        self.fill()
+        self.assertEqual(report.top_expenses(self.store, self.S, self.E, 0), [])
+
+    def test_top_expenses_skips_deleted(self):
+        self.fill()
+        got = report.top_expenses(self.store, self.S, self.E)
+        self.assertNotIn(4, [e["id"] for e in got])
+
+    def test_biggest_day(self):
+        self.fill()
+        self.assertEqual(report.biggest_day(self.store, self.S, self.E), ("2026-11-10", 12000))
+
+    def test_biggest_day_tie_picks_earlier_date(self):
+        self.put(1, "2026-11-12", NAMES[0], 500)
+        self.put(2, "2026-11-05", NAMES[0], 500)
+        self.assertEqual(report.biggest_day(self.store, self.S, self.E), ("2026-11-05", 500))
+
+    def test_biggest_day_none_when_no_expense(self):
+        self.assertIsNone(report.biggest_day(self.store, self.S, self.E))
+
+    def test_search_all_without_conditions(self):
+        self.fill()
+        self.assertEqual(self.ids(), [1, 2, 3, 5])
+
+    def test_search_period_start_and_end_only(self):
+        self.fill()
+        self.assertEqual(self.ids(start="2026-11-11"), [3, 5])
+        self.assertEqual(self.ids(end="2026-11-10"), [1, 2])
+
+    def test_search_person_payer_or_member(self):
+        self.fill()
+        kim, lee, park = NAMES
+        self.assertEqual(self.ids(person=kim), [1, 5])
+        self.assertEqual(self.ids(person=lee), [1, 2, 5])
+        self.assertEqual(self.ids(person=park), [1, 2, 3, 5])
+
+    def test_search_amount_range_includes_edges(self):
+        self.fill()
+        self.assertEqual(self.ids(min_amount=7000), [2, 3])
+        self.assertEqual(self.ids(max_amount="5,000"), [1, 5])
+        self.assertEqual(self.ids(min_amount=5000, max_amount=7000), [1, 2, 3])
+
+    def test_search_word_in_memo(self):
+        self.fill()
+        self.assertEqual(self.ids(word="점심"), [1, 3])
+        self.assertEqual(self.ids(word="없는낱말"), [])
+
+    def test_search_combines_conditions(self):
+        self.fill()
+        self.assertEqual(self.ids(person=NAMES[1], word="커피"), [2])
+
+    def test_search_skips_deleted(self):
+        self.fill()
+        self.assertNotIn(4, self.ids())
+
+    def test_search_sorted_by_date_then_id(self):
+        self.put(3, "2026-11-10", NAMES[0], 1)
+        self.put(1, "2026-11-12", NAMES[0], 1)
+        self.put(2, "2026-11-10", NAMES[0], 1)
+        self.assertEqual(self.ids(), [2, 3, 1])
+
+    def test_search_impossible_range_is_empty(self):
+        self.fill()
+        self.assertEqual(self.ids(min_amount=8000, max_amount=1000), [])
+
+
+class ReportText(StoreCase):
+    def put(self, eid, date, payer, amount, category=None, memo="", deleted=None):
+        e = {"id": eid, "date": date, "payer": payer, "amount": amount,
+             "members": list(NAMES), "category": category, "memo": memo}
+        if deleted is not None:
+            e["deleted"] = deleted
+        self.store.data["expenses"].append(e)
+
+    def fill(self):
+        kim, lee, park = NAMES
+        self.put(1, "2026-10-05", kim, 3000, "식비", "10월 점심")
+        self.put(2, "2026-11-12", lee, 6000, "식비", "점심 식대")
+        self.put(3, "2026-11-13", kim, 9000, "교통", "택시")
+        self.put(4, "2026-11-14", park, 500, "식비", "삭제됨", deleted=True)
+        self.put(5, "2026-11-20", park, 2400)
+
+    def test_title_and_total(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("2026-11 월별 보고서 (2026-11-01 ~ 2026-11-30)", text)
+        self.assertIn("합계: 17,400원 (3건)", text)
+
+    def test_total_matches_period_total(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        total = queries.period_total(self.store, "2026-11-01", "2026-11-30")
+        self.assertIn(f"합계: {total:,}원", text)
+
+    def test_has_all_sections(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        for part in ["[분류별]", "[사람별 낸 돈]", "[요일별]", "[큰 지출 5건]",
+                     "가장 많이 쓴 날: 2026-11-13 (9,000원)"]:
+            self.assertIn(part, text)
+
+    def test_month_over_month_line(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("전월 대비: 지난달 3,000원, +14,400원 (+480%)", text)
+
+    def test_no_last_month_message(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-10")
+        self.assertIn("지난달 지출이 없어 비교하지 않습니다", text)
+
+    def test_deleted_expense_skipped(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertNotIn("삭제됨", text)
+
+    def test_uncategorized_label(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-11")
+        self.assertIn("미분류", text)
+
+    def test_empty_month(self):
+        self.fill()
+        text = report.month_report(self.store, "2026-12")
+        self.assertIn("이 달에는 지출이 없습니다.", text)
+        self.assertNotIn("[분류별]", text)
+
+    def test_bad_month_raises(self):
+        with self.assertRaises(ValueError):
+            report.month_report(self.store, "2026-13")
+
+    def test_save_report_writes_file(self):
+        path = self.path("r.txt")
+        got = report.save_report("안녕\n둘째 줄", path)
+        self.assertEqual(got, path)
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "안녕\n둘째 줄\n")
+
+    def test_save_report_single_trailing_newline(self):
+        path = self.path("r.txt")
+        report.save_report("끝\n", path)
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "끝\n")
+
+    def test_save_report_rejects_non_txt(self):
+        with self.assertRaises(ValueError):
+            report.save_report("x", self.path("r.csv"))
+
+    def test_save_report_missing_folder(self):
+        with self.assertRaises(FileNotFoundError):
+            report.save_report("x", self.path("없는폴더/r.txt"))
+            
+            
 if __name__ == "__main__":
     unittest.main()

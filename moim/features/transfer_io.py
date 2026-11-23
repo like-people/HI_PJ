@@ -10,17 +10,63 @@
 필요하면 함수를 더 만들어도 된다. 다른 기능 파일은 불러 쓰지 않는다.
 """
 
+import os
+import tempfile
 import csv
 import copy
 import json
 from ..common import dates, ledger, money
 from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
-from ..common.queries import active_members, expenses_in
+from ..common.queries import active_members, expenses_in, category_of
 
 
 def export_csv(store, path, start=None, end=None, category=None):
     """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
-    raise NotImplementedError("이 함수를 구현한다")
+    start_date = start or "0001-01-01"
+    end_date = end or "9999-12-31"
+    expenses = expenses_in(store, start_date, end_date)
+
+    if category is not None:
+        expenses = [
+            e for e in expenses
+            if category_of(e) == category
+        ]
+
+    headers = [
+        "id", "date", "payer", "amount",
+        "members", "weights", "category", "memo",
+    ]
+
+    total = 0
+
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+
+        for e in expenses:
+            members = e["members"]
+            weights = e.get("weights")
+
+            members_text = ";".join(members)
+            weights_text = (
+                ";".join(f"{name}:{weights[name]}" for name in members)
+                if weights else ""
+            )
+
+            writer.writerow([
+                e["id"],
+                e["date"],
+                e["payer"],
+                e["amount"],
+                members_text,
+                weights_text,
+                e.get("category") or "",
+                e.get("memo") or "",
+            ])
+
+            total += e["amount"]
+
+    return len(expenses), total
 
 
 def export_json(store, path, start=None, end=None, category=None):
@@ -28,8 +74,50 @@ def export_json(store, path, start=None, end=None, category=None):
 
 
 def file_total(path):
-    """내보낸 파일의 금액 합계와 건수."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """내보낸 파일의 금액 합계와 건수를 반환한다: (건수, 합계)."""
+    if str(path).lower().endswith(".json"):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict):
+            rows = data.get("expenses", [])
+        elif isinstance(data, list):
+            rows = data
+        else:
+            raise ValueError("JSON 파일 형식이 올바르지 않습니다")
+
+        rows = [
+            row for row in rows
+            if not row.get("deleted", False)
+        ]
+
+        total = 0
+        for row in rows:
+            if "amount" not in row:
+                raise ValueError("JSON 거래에 amount 필드가 없습니다")
+            total += money.to_won(row["amount"])
+
+        return len(rows), total
+
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        if reader.fieldnames is None or "amount" not in reader.fieldnames:
+            raise ValueError("CSV 파일에 amount 열이 없습니다")
+
+        count = 0
+        total = 0
+
+        for row in reader:
+            if not row:
+                continue
+
+            amount = row.get("amount", "").strip()
+
+            count += 1
+            total += money.to_won(amount)
+
+    return count, total
 
 
 def verify_export(store, path, start=None, end=None, category=None):
@@ -49,11 +137,49 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
 
 def backup_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """현재 모임 자료 전체를 JSON 백업 파일로 저장한다."""
+
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=directory,
+            prefix=".moim-backup-",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            temp_path = f.name
+            json.dump(store.data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(temp_path, path)
+        temp_path = None
+
+    finally:
+        if temp_path is not None and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 def restore_all(store, path):
-    raise NotImplementedError("이 함수를 구현한다")
+    """JSON 백업 파일을 읽어 현재 모임 자료 전체를 메모리에 복원한다.
+    실제 자료 파일 저장은 호출 측에서 복원 성공을 확인한 뒤
+    Store.save()를 호출해 처리한다."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError("백업 파일 형식이 올바르지 않습니다")
+
+    store._check_shape(data)
+    store.data = copy.deepcopy(data)
+
+    return store
 
 
 def merge(store, other_path):

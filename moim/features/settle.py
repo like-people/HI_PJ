@@ -61,7 +61,21 @@ def balance_sum(rows):
 
 def minimal_transfers(rows):
     """송금 횟수를 줄인 '누가 누구에게 얼마' 목록. 가장 많이 보낼 사람이 가장 많이 받을 사람에게 보내는 방식."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 남은 금액은 따로 계산한다(rows 는 바꾸지 않음). 목록은 rows 순서(명부 순서)를 유지한다.
+    senders = [[name, -r["balance"]] for name, r in rows.items() if r["balance"] < 0]
+    receivers = [[name, r["balance"]] for name, r in rows.items() if r["balance"] > 0]
+    transfers = []
+    while senders and receivers:
+        # max 는 같은 값이면 앞의 것을 고르므로, 금액이 같으면 명부 순서가 먼저다.
+        frm = max(senders, key=lambda s: s[1])
+        to = max(receivers, key=lambda r: r[1])
+        amount = min(frm[1], to[1])
+        transfers.append((frm[0], to[0], amount))
+        frm[1] -= amount
+        to[1] -= amount
+        senders = [s for s in senders if s[1] > 0]
+        receivers = [r for r in receivers if r[1] > 0]
+    return transfers
 
 
 def record_transfer(store, date, frm, to, amount):
@@ -102,17 +116,48 @@ def lock_period(store, start, end):
 
 def statement(store, start, end, person):
     """정산 내역서: 그 사람이 어떤 지출에 얼마를 부담했는지. [(날짜, 번호, 메모, 지출 금액, 내 부담액)]"""
-    raise NotImplementedError("이 함수를 구현한다")
+    if store.member(person) is None:
+        raise ValueError(f"명부에 없는 사람입니다: {person}")
+    # 부담액은 balances·member_shares 와 같은 expense_shares 로 계산해 내역서 합 = 그 사람의 owed 가 되게 한다.
+    # 참여자인 지출만 넣는다(낸 사람이어도 참여자가 아니면 부담이 없으므로 넣지 않는다). 순서는 expenses_in(날짜 → 번호).
+    rows = []
+    for e in expenses_in(store, start, end):
+        if person in e["members"]:
+            rows.append((e["date"], e["id"], e.get("memo", ""), e["amount"], expense_shares(e)[person]))
+    return rows
 
 
 def exclude_member(store, eid, name):
     """특정 지출에서 특정 사람을 뺀다(그 사람 몫을 남은 사람이 나눈다)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    e = store.get_expense(eid)
+    if e.get("deleted"):
+        raise ValueError(f"삭제된 지출입니다: {e['id']}번")
+    # 규약 6절: 확정한 기간의 지출은 수정할 수 없다.
+    if is_locked(store, e["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 고칠 수 없습니다: {e['date']}")
+    if name not in e["members"]:
+        raise ValueError(f"{e['id']}번 지출의 참여자가 아닙니다: {name}")
+    if len(e["members"]) == 1:
+        raise ValueError(f"참여자가 한 명뿐이라 뺄 수 없습니다: {name}")
+    # 규격 4-4 2번: members·weights 에서 빼고 수정 이력에 "exclude" 로 남긴다.
+    before = copy.deepcopy(e)
+    e["members"] = [m for m in e["members"] if m != name]
+    if e.get("weights"):
+        e["weights"] = {m: w for m, w in e["weights"].items() if m != name}
+    store.record("exclude", e["id"], before, e)
+    return e
 
 
 def compare(old_rows, new_rows):
     """이전 정산과 비교: {이름: (이전 잔액, 지금 잔액, 차이)}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 순서: 지금 정산(명부 순서) 다음에 이전 정산에만 있는 사람. 한쪽에 없으면 잔액 0, 차이 = 지금 - 이전.
+    names = list(new_rows) + [name for name in old_rows if name not in new_rows]
+    result = {}
+    for name in names:
+        before = old_rows[name]["balance"] if name in old_rows else 0
+        now = new_rows[name]["balance"] if name in new_rows else 0
+        result[name] = (before, now, now - before)
+    return result
 
 
 def add_recurring(store, day, payer, amount, members, memo, start_month):

@@ -43,9 +43,32 @@ def validate(store, date, payer, amount, members, weights=None):
 
 
 
+# 담당: 기능 6(류강현)
 def duplicates(store, date, payer, amount, exclude_id=None):
-    """같은 날·같은 금액·같은 사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
-    raise NotImplementedError("기능 6 담당이 구현한다")
+    """같은 날짜·금액·사람의 지출 번호 목록(삭제된 것 제외). 담당: 기능 6"""
+    target_date = dates.fmt(date)
+    target_amount = money.to_won(amount)
+    result = []
+
+    for expense in store.data["expenses"]:
+        if expense.get("deleted", False):
+            continue
+
+        if dates.fmt(expense["date"]) != target_date:
+            continue
+
+        if expense["payer"] != payer:
+            continue
+
+        if expense["amount"] != target_amount:
+            continue
+
+        if exclude_id is not None and expense["id"] == exclude_id:
+            continue
+
+        result.append(expense["id"])
+
+    return sorted(result)
 
 #담당: 기능1(이승경)
 def insert(store, date, payer, amount, members, memo="", weights=None, category=None,

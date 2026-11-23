@@ -24,8 +24,7 @@ def monthly_totals(store, start_month, end_month):
     totals = {}
     for year, month in dates.months_between(dates.parse_month(start_month), dates.parse_month(end_month)):
         first, last = dates.month_range(year, month)
-        # TODO: period_total·month_key(기능 6) 병합 후 교체
-        totals[f"{year:04d}-{month:02d}"] = sum(e["amount"] for e in expenses_in(store, first, last))
+        totals[dates.month_key(first)] = period_total(store, first, last)
     return totals
 
 
@@ -33,17 +32,14 @@ def monthly_totals(store, start_month, end_month):
 def period_summary(store, start, end):
     """기간 보고: {"total": 합계, "by_category": {분류: 금액}, "by_person": {이름: 낸 돈}}"""
     return {
-        # TODO: period_total·month_key(기능 6) 병합 후 교체
-        "total": sum(e["amount"] for e in expenses_in(store, start, end)),
+        "total": period_total(store, start, end),
         "by_category": {name: v["amount"] for name, v in category_totals(store, start, end).items()},
         "by_person": person_paid(store, start, end),
     }
 
-
 def _month_sum(store, year, month):
     first, last = dates.month_range(year, month)
-    # TODO: period_total·month_key(기능 6) 병합 후 교체
-    return sum(e["amount"] for e in expenses_in(store, first, last))
+    return period_total(store, first, last)
 
 
 # 담당: 기능 3(류훈태)
@@ -89,23 +85,90 @@ def week_totals(store, start, end):
     return totals
 
 
+# 담당: 기능 3(류훈태)
 def top_expenses(store, start, end, n=5):
-    raise NotImplementedError("이 함수를 구현한다")
+    """기간에서 금액이 큰 지출 n 건(지출 dict 그대로). 금액 큰 순, 같으면 날짜·번호 순. 삭제된 지출은 뺀다."""
+    if n <= 0:
+        return []
+    ranked = sorted(expenses_in(store, start, end), key=lambda e: (-e["amount"], e["date"], e["id"]))
+    return ranked[:n]
 
 
+# 담당: 기능 3(류훈태)
 def biggest_day(store, start, end):
-    raise NotImplementedError("이 함수를 구현한다")
+    """지출 합계가 가장 큰 날. 돌려주는 값: (날짜 'YYYY-MM-DD', 그날 합계). 지출이 없으면 None. 합계가 같으면 빠른 날짜."""
+    by_day = {}
+    for e in expenses_in(store, start, end):
+        day = dates.fmt(e["date"])
+        by_day[day] = by_day.get(day, 0) + e["amount"]
+    if not by_day:
+        return None
+    day = min(by_day, key=lambda d: (-by_day[d], d))
+    return day, by_day[day]
 
 
+# 담당: 기능 3(류훈태)
 def month_report(store, month):
-    raise NotImplementedError("이 함수를 구현한다")
+    """한 달 보고서 문자열. 합계, 전월 대비, 분류별, 사람별, 요일별, 큰 지출, 가장 많이 쓴 날을 담는다."""
+    year, mon = dates.parse_month(month)
+    key = f"{year:04d}-{mon:02d}"
+    start, end = dates.month_range(year, mon)
+    summary = period_summary(store, start, end)
+    items = expenses_in(store, start, end)
+    lines = [f"{key} 월별 보고서 ({dates.fmt(start)} ~ {dates.fmt(end)})", ""]
+    if not items:
+        lines.append("이 달에는 지출이 없습니다.")
+        return "\n".join(lines)
+
+    this_total, last_total, change, percent = month_over_month(store, key)
+    lines.append(f"합계: {money.fmt(summary['total'])}원 ({len(items)}건)")
+    if last_total == 0:
+        lines.append("전월 대비: 지난달 지출이 없어 비교하지 않습니다.")
+    else:
+        lines.append(f"전월 대비: 지난달 {money.fmt(last_total)}원, {change:+,}원 ({percent:+d}%)")
+
+    cats = category_totals(store, start, end)
+    lines += ["", "[분류별]"]
+    lines.append(table(["분류", "건수", "금액"],
+                       [[name, v["count"], v["amount"]] for name, v in cats.items()],
+                       total=["합계", len(items), summary["total"]], numeric={1, 2}))
+    lines += ["", bar_chart(summary["by_category"])]
+
+    lines += ["", "[사람별 낸 돈]"]
+    lines.append(table(["이름", "낸 돈"], [[name, v] for name, v in summary["by_person"].items()], numeric={1}))
+
+    lines += ["", "[요일별]", bar_chart(weekday_totals(store, start, end))]
+
+    lines += ["", "[큰 지출 5건]"]
+    lines.append(table(["날짜", "번호", "메모", "금액"],
+                       [[e["date"], e["id"], e.get("memo") or "", e["amount"]] for e in top_expenses(store, start, end)],
+                       numeric={3}))
+
+    day, amount = biggest_day(store, start, end)
+    lines += ["", f"가장 많이 쓴 날: {day} ({money.fmt(amount)}원)"]
+    return "\n".join(lines)
 
 
+# 담당: 기능 3(류훈태)
 def save_report(text, path):
     """보고서를 텍스트 파일(.txt)로 저장한다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    if not str(path).lower().endswith(".txt"):
+        raise ValueError(f"보고서는 .txt 파일로 저장합니다: {path}")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text if text.endswith("\n") else text + "\n")
+    return path
 
 
+# 담당: 기능 3(류훈태)
 def search(store, start=None, end=None, person=None, min_amount=None, max_amount=None, word=None):
     """지출 검색. 기간, 사람(낸 사람이거나 참여자), 금액 범위, 메모 낱말로 찾는다. 삭제된 지출은 빼고 날짜순."""
-    raise NotImplementedError("이 함수를 구현한다")
+    found = expenses_in(store, start or "0001-01-01", end or "9999-12-31")
+    if person is not None:
+        found = [e for e in found if e["payer"] == person or person in e["members"]]
+    if min_amount is not None:
+        found = [e for e in found if e["amount"] >= money.to_won(min_amount)]
+    if max_amount is not None:
+        found = [e for e in found if e["amount"] <= money.to_won(max_amount)]
+    if word:
+        found = [e for e in found if word in (e.get("memo") or "")]
+    return found
