@@ -44,6 +44,9 @@ def file_total(path):
         else:
             raise ValueError("JSON 파일 형식이 올바르지 않습니다")
 
+        if any(not isinstance(row, dict) for row in rows):
+            raise ValueError("JSON 지출 항목 형식이 올바르지 않습니다")
+
         rows = [
             row for row in rows
             if not row.get("deleted", False)
