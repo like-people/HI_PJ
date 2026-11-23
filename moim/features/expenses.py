@@ -74,7 +74,12 @@ def load_members_file(store, path):
                 {"name": name, "joined": dates.fmt(joined), "left": dates.fmt(left) if left else None})
             added.append(name)
         elif left is not None and member.get("left") != dates.fmt(left):
-            member["left"] = dates.fmt(left)
+            # 탈퇴일 뒤 지출에 들어 있는지 등은 leave_member 가 같은 규칙으로 검사한다(기능 1 규칙)
+            try:
+                leave_member(store, name, dates.fmt(left))
+            except ValueError as e:
+                errors.append((no, str(e)))
+                continue
             left_applied.append(name)
     return added, left_applied, errors
 
