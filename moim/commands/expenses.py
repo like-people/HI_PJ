@@ -48,6 +48,9 @@ def add_parser(sub, period_args):
 
     delete = grp.add_parser("delete", help="지출 삭제")
     delete.add_argument("eid", type=int, help="지출 번호")
+
+    restore = grp.add_parser("restore", help="삭제한 지출 되살리기")
+    restore.add_argument("eid", type=int, help="지출 번호")
     return grp
 
 
@@ -104,6 +107,15 @@ def run(c, args, cfg, store, out):
             out(f"{args.eid}번 지출은 이미 삭제됐습니다.")
             return False
         out(f"{args.eid}번 지출을 삭제했습니다.")
+        return True
+
+    if c == "restore":
+        was_deleted = store.get_expense(args.eid).get("deleted", False)
+        expenses.restore_expense(store, args.eid)
+        if not was_deleted:
+            out(f"{args.eid}번 지출은 삭제되지 않았습니다.")
+            return False
+        out(f"{args.eid}번 지출을 되살렸습니다.")
         return True
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
