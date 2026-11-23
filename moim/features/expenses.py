@@ -147,7 +147,10 @@ def add_from_file(store, path):
     # 줄 번호는 파일의 실제 줄 번호(첫 줄이 1, 규격 6-2 1번). 오류 줄은 건너뛰고 나머지는 넣는다.
     # 한 줄씩 add_expense(ledger.insert)로 넣으므로 명부·회원 기간·확정 기간 검사를 똑같이 받는다.
     # 메모에 쉼표가 있으면 따옴표로 감싸거나(CSV 형식), 다섯째 칸부터를 쉼표로 이어 메모로 본다.
-    encoding = detect_encoding(path)
+    try:
+        encoding = detect_encoding(path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"파일을 찾을 수 없습니다: {path}") from None
     with open(path, encoding=encoding, newline="") as f:
         lines = f.read().splitlines()
 
