@@ -179,6 +179,27 @@ class ExportCsvTests(StoreCase):
 
         self.assertEqual(verify_export(self.store, path), (False, 2000, 1000))
 
+    def test_verify_export_matches_sum_with_different_count(self):
+        self.add_expense(1, "2026-11-10", NAMES[0], 1000, NAMES)
+
+        path = self.path("verify_same_sum.csv")
+        export_csv(self.store, path)
+
+        # 파일의 건수는 원본과 다르지만 합계는 동일하게 변경
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.reader(f))
+
+        rows[1][3] = "500"
+        second_row = rows[1].copy()
+        second_row[3] = "500"
+        rows.append(second_row)
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+
+        self.assertEqual(verify_export(self.store, path), (True, 1000, 1000))
+
     def test_verify_export_with_filters(self):
         self.add_expense(1, "2026-11-09", NAMES[0], 1000, NAMES, category="식비")
         self.add_expense(2, "2026-11-10", NAMES[0], 2000, NAMES, category="교통")

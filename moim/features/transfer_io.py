@@ -133,15 +133,11 @@ def verify_export(store, path, start=None, end=None, category=None):
             if category_of(e) == category
         ]
 
-    record_count = len(expenses)
     record_total = sum(e["amount"] for e in expenses)
 
-    file_count, file_sum = file_total(path)
+    _, file_sum = file_total(path)
 
-    matched = (
-        record_count == file_count
-        and record_total == file_sum
-    )
+    matched = record_total == file_sum
 
     return matched, file_sum, record_total
 
