@@ -6,7 +6,6 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 """
 
 from ..common.textfmt import table
-from ..features.expenses import load_members_file
 from ..features import expenses as feat
 
 GROUP = 'member'
@@ -26,7 +25,7 @@ def run(c, args, cfg, store, out):
     # 예: if c == "list": ...; return False
     if c == "load":
         path = args.file or cfg.get("members_file", "members.txt")
-        added, left, errors = load_members_file(store, path)
+        added, left, errors = feat.load_members_file(store, path)
         out(f"추가 {len(added)}명, 탈퇴 반영 {len(left)}명, 오류 {len(errors)}줄")
         for no, msg in errors:
             out(f"{no}번째 줄: {msg}")
