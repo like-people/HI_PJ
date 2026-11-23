@@ -158,10 +158,16 @@ def undo_last_edit(store, eid):
     for field in fields:
         if before.get(field) != after.get(field):
             restored[field] = copy.deepcopy(before.get(field))
-    restored["date"], restored["amount"] = ledger.validate(
-        store, restored["date"], restored["payer"], restored["amount"], restored["members"],
-        restored.get("weights"),
-    )
+    try:
+        restored["date"], restored["amount"] = ledger.validate(
+            store, restored["date"], restored["payer"], restored["amount"], restored["members"],
+            restored.get("weights"),
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"{expense['id']}번 지출을 되돌릴 수 없습니다: {exc} "
+            f"(뒤에 참여자가 바뀌어(제외 등) 이전 상태로 되돌릴 수 없습니다)"
+        ) from None
 
     store.record("undo", expense["id"], expense, restored)
     expense.update(restored)
