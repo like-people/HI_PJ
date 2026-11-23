@@ -6,6 +6,7 @@
 """
 
 import argparse
+import pathlib
 
 from .commands import budget, categorize, expenses, members, report, settle, transfer_io
 from .common import config as cfgmod
@@ -41,7 +42,11 @@ def main(argv=None, out=print):
     try:
         if args.group == "init":
             # 설정 파일만 만든다. 자료 파일은 처음 저장할 때 Store.save() 가 만든다.
-            cfgmod.save_default(args.config)
+            try:
+                cfgmod.save_default(args.config)
+            except FileNotFoundError:
+                folder = str(pathlib.Path(args.config).parent)
+                raise FileNotFoundError(f"설정 파일을 만들 폴더가 없습니다: {folder}") from None
             out(f"설정 파일을 만들었습니다: {args.config}")
             return 0
         cfg = cfgmod.load(args.config)
