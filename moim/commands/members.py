@@ -5,7 +5,6 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 인자 해석은 common/cliutil.py 의 _members(참여자), _weights(비율), _period(기간)를 쓴다.
 """
 
-from ..features.expenses import load_members_file
 from ..features import expenses as feat
 
 GROUP = 'member'
@@ -13,6 +12,9 @@ GROUP = 'member'
 
 def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="참여자 명부").add_subparsers(dest="cmd")
+    s = grp.add_parser("add", help="회원 추가")
+    s.add_argument("name", help="이름")
+    s.add_argument("--joined", required=True, help="가입일(YYYY-MM-DD)")
     # 예: s = grp.add_parser("list"); s.add_argument("--order", default="id")
     #     기간을 받는 명령은 period_args(s) 로 --month, --start, --end 를 붙인다.
     s = grp.add_parser("leave", help="회원 탈퇴(탈퇴일 당일까지 회원)")
@@ -24,6 +26,10 @@ def add_parser(sub, period_args):
 
 
 def run(c, args, cfg, store, out):
+    if c == "add":
+        member = feat.add_member(store, args.name, args.joined)
+        out(f"회원을 추가했습니다: {member['name']} (가입일 {member['joined']})")
+        return True
     # 예: if c == "list": ...; return False
     if c == "leave":
         member = feat.leave_member(store, args.name, args.date)
@@ -31,7 +37,7 @@ def run(c, args, cfg, store, out):
         return True
     if c == "load":
         path = args.file or cfg.get("members_file", "members.txt")
-        added, left, errors = load_members_file(store, path)
+        added, left, errors = feat.load_members_file(store, path)
         out(f"추가 {len(added)}명, 탈퇴 반영 {len(left)}명, 오류 {len(errors)}줄")
         for no, msg in errors:
             out(f"{no}번째 줄: {msg}")
