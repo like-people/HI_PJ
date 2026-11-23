@@ -35,6 +35,9 @@ def add_parser(sub, period_args):
     listing = grp.add_parser("list", help="지출 목록")
     listing.add_argument("--order", choices=("id", "date"), default="id", help="정렬 기준")
 
+    hist = grp.add_parser("history", help="수정·삭제 이력")
+    hist.add_argument("eid", type=int, nargs="?", help="지출 번호(없으면 전체)")
+
     edit = grp.add_parser("edit", help="지출 수정", argument_default=argparse.SUPPRESS)
     edit.add_argument("eid", type=int, help="지출 번호")
     _expense_fields(edit)
@@ -46,6 +49,34 @@ def add_parser(sub, period_args):
     delete = grp.add_parser("delete", help="지출 삭제")
     delete.add_argument("eid", type=int, help="지출 번호")
     return grp
+
+
+_ACTIONS = {"add": "추가", "edit": "수정", "delete": "삭제", "restore": "되살리기",
+            "undo": "되돌리기", "exclude": "참여자 빼기"}
+_FIELDS = {"date": "날짜", "payer": "낸 사람", "amount": "금액", "members": "참여자",
+           "weights": "비율", "category": "분류", "memo": "메모"}
+
+
+def _show(field, value):
+    if value is None or value == "":
+        return "-"
+    if field == "amount":
+        return f"{value:,}"
+    if field == "members":
+        return ";".join(value)
+    if field == "weights":
+        return ";".join(f"{name}={w}" for name, w in value.items())
+    return str(value)
+
+
+def _changes(entry):
+    """이력 한 건의 내용: 추가는 지출 요약, 그 밖에는 바뀐 항목 '이름 전→후'."""
+    before, after = entry.get("before") or {}, entry.get("after") or {}
+    if not before:
+        return " ".join(_show(f, after.get(f)) for f in ("date", "payer", "amount", "members"))
+    parts = [f"{label} {_show(f, before.get(f))}→{_show(f, after.get(f))}"
+             for f, label in _FIELDS.items() if before.get(f) != after.get(f)]
+    return ", ".join(parts)
 
 
 def run(c, args, cfg, store, out):
@@ -71,6 +102,16 @@ def run(c, args, cfg, store, out):
                       rows, numeric={3}))
         else:
             out("등록된 지출이 없습니다.")
+        return False
+
+    if c == "history":
+        entries = expenses.history(store, args.eid)
+        if entries:
+            rows = [(h["at"], _ACTIONS.get(h["action"], h["action"]), h["eid"], _changes(h))
+                    for h in entries]
+            out(table(("시각", "작업", "번호", "내용"), rows))
+        else:
+            out("이력이 없습니다.")
         return False
 
     if c == "edit":
