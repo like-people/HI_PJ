@@ -121,6 +121,42 @@ class Scenario(StoreCase):
         self.assertEqual(categorize.apply_rules(self.store, self.rules), [])
         self.assert_all_equal(NOV_TOTAL)
 
+    def test_verify_export(self):
+        # 기능 6 내보낸 파일 합계 검사: 같은 기간·분류 조건이면 파일 합계 = 기록 합계
+        path = self.path("verify.csv")
+        transfer_io.export_csv(self.store, path, START, END)
+        self.assertEqual(transfer_io.verify_export(self.store, path, START, END), (True, NOV_TOTAL, NOV_TOTAL))
+        transfer_io.export_csv(self.store, path, START, END, "식비")
+        self.assertEqual(transfer_io.verify_export(self.store, path, START, END, "식비"), (True, FOOD, FOOD))
+        # 내보낸 뒤 기록이 바뀌면 다르다고 알린다.
+        expenses.delete_expense(self.store, self.lunch["id"])
+        self.assertEqual(transfer_io.verify_export(self.store, path, START, END, "식비"), (False, FOOD, FOOD - 30000))
+
+    def test_leave_member_keeps_totals(self):
+        # 박지훈은 11/25 반복 지출까지 참여하므로 그 전 날짜로는 탈퇴할 수 없다.
+        with self.assertRaisesRegex(ValueError, "탈퇴일 뒤의 지출"):
+            expenses.leave_member(self.store, PARK, "2026-11-24")
+        expenses.leave_member(self.store, PARK, "2026-11-25")
+        with self.assertRaises(ValueError):
+            expenses.add_expense(self.store, "2026-11-26", KIM, 3000, NAMES)
+        # 반복 지출은 참여자가 회원이 아닌 달을 건너뛴다(규격 4-4 7번).
+        self.assertEqual(settle.run_recurring(self.store, "2026-12-31"), [])
+        self.assertEqual(settle.balance_sum(settle.balances(self.store, START, END)), 0)
+        self.assert_all_equal(NOV_TOTAL)
+
+    def test_members_file_leave_follows_same_rule(self):
+        # 명부 파일(member load)로 넣어도 member leave 와 같은 규칙으로 막는다(#127).
+        path = self.path("members.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"{PARK},2026-09-01,2026-11-24\n")
+        added, left, errors = expenses.load_members_file(self.store, path)
+        self.assertEqual((added, left, [no for no, _ in errors]), ([], [], [1]))
+        self.assertIsNone(self.store.member(PARK)["left"])
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"{PARK},2026-09-01,2026-11-25\n")
+        self.assertEqual(expenses.load_members_file(self.store, path), ([], [PARK], []))
+        self.assert_all_equal(NOV_TOTAL)
+
     def test_totals_follow_later_changes(self):
         # 확정 전에 지출을 더하고 지우면 다섯 값이 함께 바뀌어야 한다.
         expenses.add_expense(self.store, "2026-11-28", PARK, 3333, [KIM, PARK], memo="택시")
