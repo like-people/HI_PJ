@@ -165,6 +165,9 @@ def add_recurring(store, day, payer, amount, members, memo, start_month):
     if isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 31:
         raise ValueError(f"반복 날짜는 1~31 사이의 정수여야 합니다: {day}")
     year, month = dates.parse_month(start_month)
+    # run_recurring 이 dt.date 로 날짜를 만들 수 있는 연도(1~9999)만 받는다. 0년 등은 저장 전에 거부한다.
+    if not dt.MINYEAR <= year <= dt.MAXYEAR:
+        raise ValueError(f"시작 달의 연도가 잘못되었습니다: {start_month}")
     try:
         won = money.to_won(amount)
     except (ValueError, DecimalException, OverflowError):

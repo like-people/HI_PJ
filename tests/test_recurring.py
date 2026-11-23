@@ -47,6 +47,26 @@ class AddRecurring(StoreCase):
                     settle.add_recurring(self.store, day, payer, amount, members, "", month)
         self.assertEqual(self.store.data["recurring"], [])
 
+    def test_rejects_year_out_of_range(self):
+        # 0년, 10000년은 형식(YYYY-MM)은 맞지만 날짜를 만들 수 없으므로 저장 전에 거부한다.
+        for month in ("0000-11", "10000-01"):
+            with self.subTest(month=month):
+                with self.assertRaises(ValueError):
+                    settle.add_recurring(self.store, 5, KIM, 1000, NAMES, "", month)
+        self.assertEqual(self.store.data["recurring"], [])
+
+    def test_bad_year_does_not_stop_other_recurring(self):
+        settle.add_recurring(self.store, 5, KIM, 1000, NAMES, "", "2026-11")
+        with self.assertRaises(ValueError):
+            settle.add_recurring(self.store, 5, KIM, 1000, NAMES, "", "0000-11")
+        created = settle.run_recurring(self.store, "2026-11-30")
+        self.assertEqual([e["date"] for e in created], ["2026-11-05"])
+
+    def test_boundary_years_are_accepted(self):
+        first = settle.add_recurring(self.store, 5, KIM, 1000, NAMES, "", "0001-01")
+        last = settle.add_recurring(self.store, 5, KIM, 1000, NAMES, "", "9999-12")
+        self.assertEqual((first["start_month"], last["start_month"]), ("0001-01", "9999-12"))
+
 
 class RunRecurring(StoreCase):
     def dates_of(self, created):
