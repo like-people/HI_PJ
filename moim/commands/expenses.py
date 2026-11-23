@@ -38,6 +38,9 @@ def add_parser(sub, period_args):
     listing = grp.add_parser("list", help="지출 목록")
     listing.add_argument("--order", choices=("id", "date"), default="id", help="정렬 기준")
 
+    hist = grp.add_parser("history", help="수정·삭제 이력")
+    hist.add_argument("eid", type=int, nargs="?", help="지출 번호(없으면 전체)")
+
     edit = grp.add_parser("edit", help="지출 수정", argument_default=argparse.SUPPRESS)
     edit.add_argument("eid", type=int, help="지출 번호")
     _expense_fields(edit)
@@ -46,9 +49,44 @@ def add_parser(sub, period_args):
     weights.add_argument("--equal", dest="weights", action="store_const", const=None,
                          help="균등 분배로 변경")
 
+    undo = grp.add_parser("undo", help="가장 최근 수정 되돌리기")
+    undo.add_argument("eid", type=int, help="지출 번호")
+
     delete = grp.add_parser("delete", help="지출 삭제")
     delete.add_argument("eid", type=int, help="지출 번호")
+
+    restore = grp.add_parser("restore", help="삭제한 지출 되살리기")
+    restore.add_argument("eid", type=int, help="지출 번호")
     return grp
+
+
+_ACTIONS = {"add": "추가", "edit": "수정", "delete": "삭제", "restore": "되살리기",
+            "undo": "되돌리기", "exclude": "참여자 빼기"}
+_FIELDS = {"date": "날짜", "payer": "낸 사람", "amount": "금액", "members": "참여자",
+           "weights": "비율", "category": "분류", "memo": "메모"}
+
+
+def _show(field, value):
+    if value is None or value == "":
+        return "-"
+    if field == "amount":
+        return f"{value:,}"
+    if field == "members":
+        return ";".join(value)
+    if field == "weights":
+        return ";".join(f"{name}={w}" for name, w in value.items())
+    return str(value)
+
+
+def _changes(entry):
+    """이력 한 건의 내용: 추가·삭제·되살리기는 지출 요약, 그 밖에는 바뀐 항목 '이름 전→후'."""
+    before, after = entry.get("before") or {}, entry.get("after") or {}
+    if not before or entry.get("action") in ("delete", "restore"):
+        src = after if not before else before
+        return " ".join(_show(f, src.get(f)) for f in ("date", "payer", "amount", "members"))
+    parts = [f"{label} {_show(f, before.get(f))}→{_show(f, after.get(f))}"
+             for f, label in _FIELDS.items() if before.get(f) != after.get(f)]
+    return ", ".join(parts)
 
 
 def run(c, args, cfg, store, out):
@@ -83,6 +121,16 @@ def run(c, args, cfg, store, out):
             out("등록된 지출이 없습니다.")
         return False
 
+    if c == "history":
+        entries = expenses.history(store, args.eid)
+        if entries:
+            rows = [(h["at"], _ACTIONS.get(h["action"], h["action"]), h["eid"], _changes(h))
+                    for h in entries]
+            out(table(("시각", "작업", "번호", "내용"), rows))
+        else:
+            out("이력이 없습니다.")
+        return False
+
     if c == "edit":
         changes = {
             field: getattr(args, field)
@@ -99,6 +147,11 @@ def run(c, args, cfg, store, out):
         out(f"{args.eid}번 지출을 수정했습니다.")
         return True
 
+    if c == "undo":
+        expenses.undo_last_edit(store, args.eid)
+        out(f"{args.eid}번 지출의 최근 수정을 되돌렸습니다.")
+        return True
+
     if c == "delete":
         was_deleted = store.get_expense(args.eid).get("deleted", False)
         expenses.delete_expense(store, args.eid)
@@ -106,6 +159,15 @@ def run(c, args, cfg, store, out):
             out(f"{args.eid}번 지출은 이미 삭제됐습니다.")
             return False
         out(f"{args.eid}번 지출을 삭제했습니다.")
+        return True
+
+    if c == "restore":
+        was_deleted = store.get_expense(args.eid).get("deleted", False)
+        expenses.restore_expense(store, args.eid)
+        if not was_deleted:
+            out(f"{args.eid}번 지출은 삭제되지 않았습니다.")
+            return False
+        out(f"{args.eid}번 지출을 되살렸습니다.")
         return True
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())

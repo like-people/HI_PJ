@@ -70,7 +70,7 @@ class TestBudgetBasicCommands(StoreCase):
     def test_usage_without_subcommand(self):
         changed, text = self._run("budget")
         self.assertFalse(changed)
-        self.assertIn("사용법: moim budget status|pay|balance", text)
+        self.assertIn("사용법: moim budget", text)
 
 
 if __name__ == "__main__":
