@@ -15,6 +15,7 @@
 import copy
 import csv
 from ..common import dates, ledger, money
+from ..common.csvio import detect_encoding
 from ..common.queries import is_locked
 
 
@@ -143,4 +144,27 @@ def add_from_file(store, path):
     한 줄 형식(쉼표 구분): 날짜,낸 사람,금액,참여자1;참여자2;...,메모
     '#' 로 시작하는 줄과 빈 줄은 건너뛴다. 돌려주는 값: (추가한 번호 목록, [(줄 번호, 오류)])
     """
-    raise NotImplementedError("이 함수를 구현한다")
+    # 줄 번호는 파일의 실제 줄 번호(첫 줄이 1, 규격 6-2 1번). 오류 줄은 건너뛰고 나머지는 넣는다.
+    # 한 줄씩 add_expense(ledger.insert)로 넣으므로 명부·회원 기간·확정 기간 검사를 똑같이 받는다.
+    # 메모에 쉼표가 있으면 따옴표로 감싸거나(CSV 형식), 다섯째 칸부터를 쉼표로 이어 메모로 본다.
+    encoding = detect_encoding(path)
+    with open(path, encoding=encoding, newline="") as f:
+        lines = f.read().splitlines()
+
+    added, errors = [], []
+    for no, raw in enumerate(lines, 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            parts = [part.strip() for part in next(csv.reader([line]))]
+            if len(parts) < 4:
+                raise ValueError("형식이 잘못되었습니다(날짜,낸 사람,금액,참여자1;참여자2,메모)")
+            day, payer, amount, members = parts[:4]
+            names = [name.strip() for name in members.split(";") if name.strip()]
+            expense, _ = add_expense(store, day, payer, amount, names, memo=",".join(parts[4:]))
+        except (ValueError, csv.Error) as exc:
+            errors.append((no, str(exc)))
+            continue
+        added.append(expense["id"])
+    return added, errors

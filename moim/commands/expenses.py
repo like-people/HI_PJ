@@ -32,6 +32,9 @@ def add_parser(sub, period_args):
     add.set_defaults(memo="")
     add.add_argument("--weights", help="분담 비율(예: 김민수=2;이서연=1)")
 
+    lines = grp.add_parser("import-lines", help="파일의 여러 줄을 한꺼번에 입력")
+    lines.add_argument("file", help="한 줄 형식: 날짜,낸 사람,금액,참여자1;참여자2,메모")
+
     listing = grp.add_parser("list", help="지출 목록")
     listing.add_argument("--order", choices=("id", "date"), default="id", help="정렬 기준")
 
@@ -58,6 +61,13 @@ def run(c, args, cfg, store, out):
         for warning in warnings:
             out(f"경고: {warning}")
         return True
+
+    if c == "import-lines":
+        added, errors = expenses.add_from_file(store, args.file)
+        out(f"추가 {len(added)}건, 오류 {len(errors)}줄")
+        for no, message in errors:
+            out(f"{no}번째 줄: {message}")
+        return bool(added)
 
     if c == "list":
         entries = expenses.list_expenses(store, order=args.order)
