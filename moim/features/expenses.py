@@ -129,7 +129,43 @@ def restore_expense(store, eid):
 
 def undo_last_edit(store, eid):
     """그 지출의 가장 최근 수정(edit)을 되돌린다. 수정 이력의 바꾸기 전 값으로 돌려놓고, 되돌린 사실도 이력에 남긴다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 되돌리기(undo) 이력 1건은 그보다 앞선 수정 1건을 이미 되돌린 것으로 센다. 그래서 여러 번 부르면 한 단계씩 뒤로 간다.
+    # 그 수정에서 실제로 바뀐 항목만 되돌린다(뒤에 다른 기능이 고친 항목, 예: exclude 의 참여자는 그대로 둔다).
+    expense = store.get_expense(eid)
+    if expense.get("deleted", False):
+        raise ValueError(f"삭제된 지출은 되돌릴 수 없습니다: {expense['id']}번")
+
+    target, undone = None, 0
+    for entry in reversed(store.data["history"]):
+        if entry["eid"] != expense["id"]:
+            continue
+        if entry["action"] == "undo":
+            undone += 1
+        elif entry["action"] == "edit":
+            if undone:
+                undone -= 1
+            else:
+                target = entry
+                break
+    if target is None:
+        raise ValueError(f"{expense['id']}번 지출에 되돌릴 수정이 없습니다")
+    if is_locked(store, expense["date"]):
+        raise ValueError(f"정산이 확정된 날짜의 지출은 되돌릴 수 없습니다: {expense['date']}")
+
+    before, after = target["before"], target["after"]
+    fields = ("date", "payer", "amount", "members", "memo", "weights", "category")
+    restored = {**expense}
+    for field in fields:
+        if before.get(field) != after.get(field):
+            restored[field] = copy.deepcopy(before.get(field))
+    restored["date"], restored["amount"] = ledger.validate(
+        store, restored["date"], restored["payer"], restored["amount"], restored["members"],
+        restored.get("weights"),
+    )
+
+    store.record("undo", expense["id"], expense, restored)
+    expense.update(restored)
+    return expense
 
 
 def history(store, eid=None):
