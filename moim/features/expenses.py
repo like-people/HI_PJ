@@ -34,7 +34,25 @@ def add_member(store, name, joined):
 
 
 def leave_member(store, name, left):
-    raise NotImplementedError("이 함수를 구현한다")
+    """회원의 탈퇴일을 정한다(탈퇴일 당일까지 회원, 규약 4절). 돌려주는 값: 바꾼 회원(dict).
+    명부에 없거나, 탈퇴일이 가입일보다 빠르거나, 탈퇴일 다음 날 이후의 지출(삭제 제외)에
+    낸 사람·참여자로 들어 있으면 ValueError(자료는 그대로)."""
+    member = store.member(name)
+    if member is None:
+        raise ValueError(f"명부에 없는 회원입니다: {name}")
+    day = dates.parse(left)
+    if day < dates.parse(member["joined"]):
+        raise ValueError(f"탈퇴일이 가입일({member['joined']})보다 빠릅니다: {dates.fmt(day)}")
+    later = sorted(
+        e["id"] for e in store.data["expenses"]
+        if not e.get("deleted") and dates.parse(e["date"]) > day
+        and (e.get("payer") == name or name in e.get("members", []))
+    )
+    if later:
+        ids = ", ".join(f"{eid}번" for eid in later)
+        raise ValueError(f"탈퇴일 뒤의 지출에 들어 있어 탈퇴 처리할 수 없습니다: {ids}")
+    member["left"] = dates.fmt(day)
+    return member
 
 # 담당: 설정 파일(백지윤)
 def load_members_file(store, path):
@@ -67,7 +85,12 @@ def load_members_file(store, path):
                 {"name": name, "joined": dates.fmt(joined), "left": dates.fmt(left) if left else None})
             added.append(name)
         elif left is not None and member.get("left") != dates.fmt(left):
-            member["left"] = dates.fmt(left)
+            # 탈퇴일 뒤 지출에 들어 있는지 등은 leave_member 가 같은 규칙으로 검사한다(기능 1 규칙)
+            try:
+                leave_member(store, name, dates.fmt(left))
+            except ValueError as e:
+                errors.append((no, str(e)))
+                continue
             left_applied.append(name)
     return added, left_applied, errors
 

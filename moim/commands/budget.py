@@ -4,7 +4,7 @@ add_parser 에서 하위 명령과 인자를 만들고, run 에서 하위 명령
 run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때만 저장한다).
 """
 
-from ..common import dates, money
+from ..common import dates, money, textfmt
 from ..features import budget as feat
 
 GROUP = "budget"
@@ -17,6 +17,9 @@ def add_parser(sub, period_args):
     s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
     s.add_argument("--today", help="기준일 YYYY-MM-DD")
 
+    s = grp.add_parser("category", help="분류별 예산 상태")
+    s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
+
     s = grp.add_parser("pay", help="회비 입금 기록")
     s.add_argument("member", help="회원 이름")
     s.add_argument("amount", help="입금액")
@@ -25,6 +28,9 @@ def add_parser(sub, period_args):
 
     s = grp.add_parser("balance", help="모임 통장 잔고")
     s.add_argument("--until", help="기준일 YYYY-MM-DD")
+
+    s = grp.add_parser("unpaid", help="월별 회비 미납자")
+    s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
 
     return grp
 
@@ -43,6 +49,10 @@ def _status_label(info):
     return "정상"
 
 
+def _cell(value):
+    return "-" if value is None else value
+
+
 def run(c, args, cfg, store, out):
     if c == "status":
         month = _month_of(args)
@@ -56,6 +66,25 @@ def run(c, args, cfg, store, out):
                 f"지출 {money.fmt(info['spent'])}원 | "
                 f"남은 금액 {money.fmt(info['remaining'])}원 | 상태: {label}"
             )
+        return False
+
+    if c == "category":
+        month = _month_of(args)
+        status = feat.category_status(store, cfg, month)
+        if not status:
+            out("분류별 예산이 설정되어 있지 않습니다")
+            return False
+        rows = [
+            (
+                cat,
+                _cell(info["budget"]),
+                info["spent"],
+                _cell(info["remaining"]),
+                _status_label(info),
+            )
+            for cat, info in status.items()
+        ]
+        out(textfmt.table(["분류", "예산", "지출", "남은 금액", "상태"], rows, numeric={1, 2, 3}))
         return False
 
     if c == "pay":
@@ -76,5 +105,17 @@ def run(c, args, cfg, store, out):
             out(f"모임 통장 잔고: {money.fmt(bal)}원")
         return False
 
-    out("사용법: moim budget status|pay|balance")
+    if c == "unpaid":
+        month = _month_of(args)
+        if cfg.get("dues", {}).get("monthly") is None:
+            out("월 회비가 설정되어 있지 않습니다")
+            return False
+        rows = feat.unpaid(store, cfg, month)
+        if not rows:
+            out(f"{month} 회비 미납자가 없습니다")
+            return False
+        out(textfmt.table(["이름", "낸 회비", "부족액"], rows, numeric={1, 2}))
+        return False
+
+    out("사용법: moim budget status|category|pay|balance|unpaid")
     return False

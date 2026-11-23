@@ -24,6 +24,12 @@ def add_parser(sub, period_args):
     period_args(s)
 
     grp.add_parser("locks", help="확정한 기간 목록")
+
+    s = grp.add_parser("transfer", help="이미 보낸 송금 기록(부분 정산)")
+    s.add_argument("--date", required=True, help="송금한 날(YYYY-MM-DD)")
+    s.add_argument("--from", dest="frm", required=True, help="보낸 사람")
+    s.add_argument("--to", required=True, help="받은 사람")
+    s.add_argument("--amount", required=True, help="송금액")
     return grp
 
 
@@ -61,6 +67,11 @@ def run(c, args, cfg, store, out):
             body = [[lk["start"], lk["end"]] for lk in sorted(locks, key=lambda lk: (lk["start"], lk["end"]))]
             out(table(["시작일", "끝일"], body))
         return False
+
+    if c == "transfer":
+        t = feat.record_transfer(store, args.date, args.frm, args.to, args.amount)
+        out(f"송금을 기록했습니다: {t['date']} {t['from']} → {t['to']} {t['amount']:,}원")
+        return True
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
     return False
