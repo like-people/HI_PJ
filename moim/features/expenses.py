@@ -24,8 +24,8 @@ def add_member(store, name, joined):
     if not isinstance(name, str) or not name.strip():
         raise ValueError("회원 이름이 비어 있습니다")
     name = name.strip()
-    if any(ch in name for ch in ",;="):
-        raise ValueError(f"회원 이름에 쉼표(,)·세미콜론(;)·등호(=)는 쓸 수 없습니다: {name}")
+    if any(ch in name for ch in ",;=:"):
+        raise ValueError(f"회원 이름에 쉼표(,)·세미콜론(;)·등호(=)·콜론(:)은 쓸 수 없습니다: {name}")
     if store.member(name) is not None:
         raise ValueError(f"이미 명부에 있는 이름입니다: {name}")
     member = {"name": name, "joined": dates.fmt(joined), "left": None}
