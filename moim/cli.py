@@ -6,6 +6,7 @@
 """
 
 import argparse
+import pathlib
 
 from .commands import budget, categorize, expenses, members, report, settle, transfer_io
 from .common import config as cfgmod
@@ -24,6 +25,7 @@ def build_parser():
     p = argparse.ArgumentParser(prog="moim", description="모임 회비·지출 정산 도구")
     p.add_argument("--config", default="config.json", help="설정 파일 경로")
     sub = p.add_subparsers(dest="group", required=True)
+    sub.add_parser("init", help="기본 설정 파일 만들기(--config 경로, 이미 있으면 오류)")
     for mod in COMMANDS:
         mod.add_parser(sub, period_args)
     return p
@@ -38,6 +40,15 @@ def run(args, cfg, store, out=print):
 def main(argv=None, out=print):
     args = build_parser().parse_args(argv)
     try:
+        if args.group == "init":
+            # 설정 파일만 만든다. 자료 파일은 처음 저장할 때 Store.save() 가 만든다.
+            try:
+                cfgmod.save_default(args.config)
+            except FileNotFoundError:
+                folder = str(pathlib.Path(args.config).parent)
+                raise FileNotFoundError(f"설정 파일을 만들 폴더가 없습니다: {folder}") from None
+            out(f"설정 파일을 만들었습니다: {args.config}")
+            return 0
         cfg = cfgmod.load(args.config)
         store = Store(cfg["data"]).load()
         if run(args, cfg, store, out):
