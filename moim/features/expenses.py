@@ -226,7 +226,12 @@ def undo_last_edit(store, eid):
 
 def history(store, eid=None):
     """수정·삭제 이력. eid 를 주면 그 지출의 이력만."""
-    raise NotImplementedError("이 함수를 구현한다")
+    # 돌려주는 값: 기록한 순서(오래된 것부터)의 이력 사본 [{"at", "action", "eid", "before", "after"}](규격 1-2)
+    entries = store.data.get("history", [])
+    if eid is not None:
+        eid = int(eid)
+        entries = [entry for entry in entries if entry["eid"] == eid]
+    return copy.deepcopy(entries)
 
 
 def add_from_file(store, path):
