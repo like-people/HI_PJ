@@ -1,4 +1,3 @@
-
 """기능 6. 가져오기·내보내기 file_total 및 roundtrip_check 테스트."""
 
 import csv
@@ -6,7 +5,6 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from moim.features.transfer_io import file_total, roundtrip_check
 
@@ -28,6 +26,16 @@ class TransferIOTests(unittest.TestCase):
         )
 
         self.assertEqual(file_total(path), (2, 8000))
+
+    def test_file_total_csv_bom_and_comma_amount(self):
+        path = self.root / "expenses.csv"
+        path.write_text(
+            "\ufeffid,date,payer,amount,members,weights,category,memo\n"
+            '1,2026-11-19,철수,"1,500",철수;영희,,식비,점심\n',
+            encoding="utf-8",
+        )
+
+        self.assertEqual(file_total(path), (1, 1500))
 
     def test_file_total_csv_without_amount(self):
         path = self.root / "expenses.csv"
@@ -89,6 +97,7 @@ class TransferIOTests(unittest.TestCase):
 
     def test_roundtrip_check_matches_export(self):
         from moim.common.store import Store
+        from moim.features.transfer_io import export_csv
 
         store = Store(self.root / "store.json")
         store.data["expenses"] = [
@@ -105,12 +114,15 @@ class TransferIOTests(unittest.TestCase):
         ]
 
         path = self.root / "roundtrip.csv"
+        export_csv(store, path)
+
         result = roundtrip_check(store, path)
 
         self.assertEqual(result, [])
 
     def test_roundtrip_check_with_filters(self):
         from moim.common.store import Store
+        from moim.features.transfer_io import export_csv
 
         store = Store(self.root / "store.json")
         store.data["expenses"] = [
@@ -137,6 +149,15 @@ class TransferIOTests(unittest.TestCase):
         ]
 
         path = self.root / "roundtrip.csv"
+
+        export_csv(
+            store,
+            path,
+            start="2026-11-19",
+            end="2026-11-19",
+            category="식비",
+        )
+
         result = roundtrip_check(
             store,
             path,
@@ -149,6 +170,7 @@ class TransferIOTests(unittest.TestCase):
 
     def test_roundtrip_check_returns_different_ids(self):
         from moim.common.store import Store
+        from moim.features.transfer_io import export_csv
 
         store = Store(self.root / "store.json")
         store.data["expenses"] = [
@@ -165,26 +187,21 @@ class TransferIOTests(unittest.TestCase):
         ]
 
         path = self.root / "roundtrip.csv"
+        export_csv(store, path)
 
-        def wrong_export(store, path, start=None, end=None, category=None):
-            with open(path, "w", encoding="utf-8-sig", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "id", "date", "payer", "amount",
-                    "members", "weights", "category", "memo",
-                ])
-                writer.writerow([
-                    "1", "2026-11-19", "철수", "4000",
-                    "철수;영희", "", "식비", "점심",
-                ])
+        # CSV 금액을 직접 수정
+        content = path.read_text(encoding="utf-8-sig")
+        self.assertIn(",3000,", content)
+        content = content.replace(",3000,", ",4000,", 1)
+        path.write_text(content, encoding="utf-8-sig")
 
-        with patch(
-            "moim.features.transfer_io.export_csv",
-            side_effect=wrong_export,
-        ):
-            result = roundtrip_check(store, path)
+        # 수정한 CSV를 검사하고 덮어쓰지 않는지 확인
+        result = roundtrip_check(store, path)
 
-        self.assertEqual(result, ["1"])
+        self.assertEqual(result, [1])
+
+        content_after = path.read_text(encoding="utf-8-sig")
+        self.assertIn(",4000,", content_after)
 
     def test_roundtrip_check_detects_duplicate_ids(self):
         from moim.common.store import Store
@@ -205,27 +222,25 @@ class TransferIOTests(unittest.TestCase):
 
         path = self.root / "roundtrip.csv"
 
-        def duplicate_export(store, path, start=None, end=None, category=None):
-            with open(path, "w", encoding="utf-8-sig", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "id", "date", "payer", "amount",
-                    "members", "weights", "category", "memo",
-                ])
-                row = [
-                    "1", "2026-11-19", "철수", "3000",
-                    "철수;영희", "", "식비", "점심",
-                ]
-                writer.writerow(row)
-                writer.writerow(row)
+        # 중복 ID가 포함된 CSV를 직접 생성
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "id", "date", "payer", "amount",
+                "members", "weights", "category", "memo",
+            ])
 
-        with patch(
-            "moim.features.transfer_io.export_csv",
-            side_effect=duplicate_export,
-        ):
-            result = roundtrip_check(store, path)
+            row = [
+                "1", "2026-11-19", "철수", "3000",
+                "철수;영희", "", "식비", "점심",
+            ]
 
-        self.assertEqual(result, ["1"])
+            writer.writerow(row)
+            writer.writerow(row)
+
+        result = roundtrip_check(store, path)
+
+        self.assertEqual(result, [1])
 
 
 if __name__ == "__main__":

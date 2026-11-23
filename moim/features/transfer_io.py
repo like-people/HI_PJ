@@ -137,9 +137,6 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
             if category_of(e) == category
         ]
 
-    # CSV로 내보내기
-    export_csv(store, path, start, end, category)
-
     # 원본 지출을 CSV 형식 문자열로 변환해 비교 기준 생성
     expected = {}
     for e in expenses:
@@ -191,7 +188,7 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
         if expected.get(eid) != actual.get(eid):
             different.add(eid)
 
-    return sorted(different)
+    return sorted(int(eid) for eid in different)
 
 
 def import_csv(store, path, mapping=None, encoding=None, preview=False):
