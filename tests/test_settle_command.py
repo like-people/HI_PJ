@@ -5,10 +5,12 @@ moim.cli.main 으로 명령을 직접 실행해 화면 출력, 종료 코드, �
 
 import json
 import unittest
+from unittest.mock import patch
 
 from helpers import NAMES, StoreCase
 
 from moim.cli import main
+from moim.common.store import Store
 
 KIM, LEE, PARK = NAMES
 
@@ -82,6 +84,55 @@ class Balance(SettleCommandCase):
         before = self.data_text()
         self.settle("balance", "--month", "2026-11")
         self.assertEqual(self.data_text(), before)
+
+
+class Lock(SettleCommandCase):
+    def saved(self):
+        with open(self.path("data.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_locks_month_and_saves(self):
+        self.put(1, "2026-11-12", LEE, 9000)
+        code, text = self.settle("lock", "--month", "2026-11")
+        self.assertEqual((code, text), (0, "정산을 확정했습니다: 2026-11-01 ~ 2026-11-30"))
+        self.assertEqual(self.saved()["locks"], [{"start": "2026-11-01", "end": "2026-11-30"}])
+
+    def test_same_period_again_does_not_save(self):
+        self.store.data["locks"].append({"start": "2026-11-01", "end": "2026-11-30"})
+        self.store.save()
+        output = []
+        with patch.object(Store, "save", side_effect=AssertionError("같은 기간 재확정인데 저장함")):
+            code = main(["--config", self.config, "settle", "lock", "--start", "2026-11-01",
+                         "--end", "2026-11-30"], output.append)
+        self.assertEqual((code, output), (0, ["이미 확정한 기간입니다: 2026-11-01 ~ 2026-11-30"]))
+
+    def test_refuses_when_total_is_not_zero(self):
+        # 명부에 없는 사람이 낸 지출은 잔액 합이 0이 아니게 만든다(규약 6절: 확정하지 않음)
+        self.put(1, "2026-11-12", "명부에없음", 9000)
+        code, text = self.settle("lock", "--month", "2026-11")
+        self.assertEqual(code, 1)
+        self.assertTrue(text.startswith("오류: 잔액 합이 0이 아니어서"))
+        self.assertEqual(self.saved()["locks"], [])
+
+    def test_requires_period(self):
+        code, text = self.settle("lock")
+        self.assertEqual(code, 1)
+        self.assertTrue(text.startswith("오류: 기간을 지정하십시오"))
+
+
+class Locks(SettleCommandCase):
+    def test_empty(self):
+        self.assertEqual(self.settle("locks"), (0, "확정한 기간이 없습니다"))
+
+    def test_sorted_table(self):
+        self.store.data["locks"] = [{"start": "2026-12-01", "end": "2026-12-31"},
+                                    {"start": "2026-11-01", "end": "2026-11-30"}]
+        code, text = self.settle("locks")
+        self.assertEqual(code, 0)
+        lines = text.splitlines()
+        self.assertEqual(lines[0].split(), ["시작일", "끝일"])
+        self.assertEqual(lines[2].split(), ["2026-11-01", "2026-11-30"])
+        self.assertEqual(lines[3].split(), ["2026-12-01", "2026-12-31"])
 
 
 class Unknown(SettleCommandCase):
