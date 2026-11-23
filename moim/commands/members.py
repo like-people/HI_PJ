@@ -5,7 +5,9 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 인자 해석은 common/cliutil.py 의 _members(참여자), _weights(비율), _period(기간)를 쓴다.
 """
 
+from ..common.textfmt import table
 from ..features.expenses import load_members_file
+from ..features import expenses as feat
 
 GROUP = 'member'
 
@@ -16,6 +18,7 @@ def add_parser(sub, period_args):
     #     기간을 받는 명령은 period_args(s) 로 --month, --start, --end 를 붙인다.
     s = grp.add_parser("load", help="명부 파일 읽기(설정의 members_file)")
     s.add_argument("--file", help="명부 파일(없으면 설정의 members_file)")
+    grp.add_parser("list", help="명부 목록(명부 순서)")
     return grp
 
 
@@ -28,5 +31,13 @@ def run(c, args, cfg, store, out):
         for no, msg in errors:
             out(f"{no}번째 줄: {msg}")
         return bool(added or left)
+    if c == "list":
+        members = feat.list_members(store)
+        if not members:
+            out("명부에 회원이 없습니다.")
+        else:
+            rows = [(m["name"], m["joined"], m.get("left") or "-") for m in members]
+            out(table(("이름", "가입일", "탈퇴일"), rows))
+        return False
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
     return False
