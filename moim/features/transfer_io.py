@@ -149,25 +149,18 @@ def verify_export(store, path, start=None, end=None, category=None):
 
 
 def roundtrip_check(store, path, start=None, end=None, category=None):
-    """내보낸 파일을 다시 읽어 원래 기록과 똑같은지 대조. 다른 번호 목록을 돌려준다(비어 있으면 같음)."""
-    start_date = start or "0001-01-01"
-    end_date = end or "9999-12-31"
-    expenses = expenses_in(store, start_date, end_date)
+    """CSV 파일을 읽어 원래 기록과 비교한다. 다른 번호 목록을 반환한다."""
+    expenses = _filtered_expenses(store, start, end, category)
 
-    if category is not None:
-        expenses = [
-            e for e in expenses
-            if category_of(e) == category
-        ]
-
-    # 원본 지출을 CSV 형식 문자열로 변환해 비교 기준 생성
+    # 원본 지출을 CSV 문자열 형식으로 변환
     expected = {}
     for e in expenses:
+        eid = str(e["id"])
         members = e["members"]
         weights = e.get("weights")
 
-        expected[str(e["id"])] = [
-            str(e["id"]),
+        expected[eid] = [
+            eid,
             e["date"],
             e["payer"],
             str(e["amount"]),
@@ -180,11 +173,22 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
             e.get("memo") or "",
         ]
 
-    # 내보낸 CSV 다시 읽기
+    # 지정된 파일은 읽기만 한다. 절대 다시 내보내지 않는다.
     actual = {}
     duplicate_ids = set()
+
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
+
+        required_headers = [
+            "id", "date", "payer", "amount",
+            "members", "weights", "category", "memo",
+        ]
+        if reader.fieldnames is None or any(
+            header not in reader.fieldnames for header in required_headers
+        ):
+            raise ValueError("CSV 파일의 필수 열이 없습니다")
+
         for row in reader:
             eid = row["id"]
 
@@ -203,7 +207,7 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
                 row["memo"],
             ]
 
-    # 값이 다르거나 누락·추가·중복된 지출 ID 반환
+    # 값이 다르거나 누락·추가·중복된 ID
     different = set(duplicate_ids)
     all_ids = set(expected) | set(actual)
 
@@ -211,7 +215,13 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
         if expected.get(eid) != actual.get(eid):
             different.add(eid)
 
-    return sorted(int(eid) for eid in different)
+    # 지출 ID는 정수만 허용한다. 비숫자 ID는 ValueError로 명확히 처리.
+    try:
+        result_ids = [int(eid) for eid in different]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("CSV 지출 ID는 정수여야 합니다") from exc
+
+    return sorted(result_ids)
 
 
 def import_csv(store, path, mapping=None, encoding=None, preview=False):

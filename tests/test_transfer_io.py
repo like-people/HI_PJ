@@ -6,26 +6,55 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from moim.features.transfer_io import file_total, roundtrip_check
+from moim.features.transfer_io import (
+    export_csv,
+    file_total,
+    roundtrip_check,
+)
 
 
 class TransferIOTests(unittest.TestCase):
 
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp_dir.cleanup)
-        self.root = Path(self.temp_dir.name)
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.root = Path(folder.name)
+
+    def make_expense(self, eid, date, payer, amount, category, memo):
+        return {
+            "id": eid,
+            "date": date,
+            "payer": payer,
+            "amount": amount,
+            "members": ["철수", "영희"],
+            "weights": None,
+            "category": category,
+            "memo": memo,
+        }
+
+    def make_store(self, expenses):
+        from moim.common.store import Store
+
+        store = Store(self.root / "store.json")
+        store.data["expenses"] = expenses
+        return store
 
     def test_file_total_csv(self):
         path = self.root / "expenses.csv"
         path.write_text(
-            "id,date,payer,amount,members,weights,category,memo\n"
-            "1,2026-11-19,철수,3000,철수;영희,,식비,점심\n"
-            "2,2026-11-20,영희,5000,철수;영희,,카페,커피\n",
-            encoding="utf-8",
+            'amount\n1000\n"1,500"\n',
+            encoding="utf-8-sig",
         )
+        self.assertEqual(file_total(path), (2, 2500))
 
-        self.assertEqual(file_total(path), (2, 8000))
+    def test_file_total_csv_without_amount(self):
+        path = self.root / "expenses.csv"
+        path.write_text(
+            "date,payer\n2026-11-19,철수\n",
+            encoding="utf-8-sig",
+        )
+        with self.assertRaises(ValueError):
+            file_total(path)
 
     def test_file_total_csv_bom_and_comma_amount(self):
         path = self.root / "expenses.csv"
@@ -34,61 +63,41 @@ class TransferIOTests(unittest.TestCase):
             '1,2026-11-19,철수,"1,500",철수;영희,,식비,점심\n',
             encoding="utf-8",
         )
-
         self.assertEqual(file_total(path), (1, 1500))
-
-    def test_file_total_csv_without_amount(self):
-        path = self.root / "expenses.csv"
-        path.write_text(
-            "id,date,payer,members,weights,category,memo\n"
-            "1,2026-11-19,철수,철수;영희,,식비,점심\n",
-            encoding="utf-8",
-        )
-
-        with self.assertRaises(ValueError):
-            file_total(path)
 
     def test_file_total_csv_with_empty_amount(self):
         path = self.root / "expenses.csv"
         path.write_text(
-            "id,date,payer,amount,members,weights,category,memo\n"
-            "1,2026-11-19,철수,,철수;영희,,식비,점심\n",
-            encoding="utf-8",
+            "amount,memo\n1000,정상 거래\n,금액 누락\n",
+            encoding="utf-8-sig",
         )
-
         with self.assertRaises(ValueError):
             file_total(path)
 
     def test_file_total_json_excludes_deleted(self):
         path = self.root / "expenses.json"
+        data = {
+            "expenses": [
+                {"amount": 1000, "deleted": False},
+                {"amount": 2000, "deleted": True},
+                {"amount": 500},
+            ]
+        }
         path.write_text(
-            json.dumps(
-                {
-                    "expenses": [
-                        {"amount": 3000, "deleted": False},
-                        {"amount": 5000, "deleted": True},
-                        {"amount": 2000},
-                    ]
-                },
-                ensure_ascii=False,
-            ),
+            json.dumps(data, ensure_ascii=False),
             encoding="utf-8",
         )
-
-        self.assertEqual(file_total(path), (2, 5000))
+        self.assertEqual(file_total(path), (2, 1500))
 
     def test_file_total_json_missing_amount(self):
         path = self.root / "expenses.json"
+        data = {
+            "expenses": [
+                {"payer": "철수"},
+            ]
+        }
         path.write_text(
-            json.dumps(
-                {
-                    "expenses": [
-                        {"deleted": False},
-                        {"amount": 3000},
-                    ]
-                },
-                ensure_ascii=False,
-            ),
+            json.dumps(data, ensure_ascii=False),
             encoding="utf-8",
         )
 
@@ -153,60 +162,28 @@ class TransferIOTests(unittest.TestCase):
             file_total(path)
 
     def test_roundtrip_check_matches_export(self):
-        from moim.common.store import Store
-        from moim.features.transfer_io import export_csv
-
-        store = Store(self.root / "store.json")
-        store.data["expenses"] = [
-            {
-                "id": 1,
-                "date": "2026-11-19",
-                "payer": "철수",
-                "amount": 3000,
-                "members": ["철수", "영희"],
-                "weights": None,
-                "category": "식비",
-                "memo": "점심",
-            },
-        ]
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 3000, "식비", "점심"
+            ),
+        ])
 
         path = self.root / "roundtrip.csv"
         export_csv(store, path)
 
-        result = roundtrip_check(store, path)
-
-        self.assertEqual(result, [])
+        self.assertEqual(roundtrip_check(store, path), [])
 
     def test_roundtrip_check_with_filters(self):
-        from moim.common.store import Store
-        from moim.features.transfer_io import export_csv
-
-        store = Store(self.root / "store.json")
-        store.data["expenses"] = [
-            {
-                "id": 1,
-                "date": "2026-11-19",
-                "payer": "철수",
-                "amount": 3000,
-                "members": ["철수", "영희"],
-                "weights": None,
-                "category": "식비",
-                "memo": "점심",
-            },
-            {
-                "id": 2,
-                "date": "2026-11-20",
-                "payer": "영희",
-                "amount": 5000,
-                "members": ["철수", "영희"],
-                "weights": None,
-                "category": "카페",
-                "memo": "커피",
-            },
-        ]
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 3000, "식비", "점심"
+            ),
+            self.make_expense(
+                2, "2026-11-20", "영희", 5000, "카페", "커피"
+            ),
+        ])
 
         path = self.root / "roundtrip.csv"
-
         export_csv(
             store,
             path,
@@ -215,89 +192,145 @@ class TransferIOTests(unittest.TestCase):
             category="식비",
         )
 
-        result = roundtrip_check(
-            store,
-            path,
-            start="2026-11-19",
-            end="2026-11-19",
-            category="식비",
+        self.assertEqual(
+            roundtrip_check(
+                store,
+                path,
+                start="2026-11-19",
+                end="2026-11-19",
+                category="식비",
+            ),
+            [],
         )
 
-        self.assertEqual(result, [])
-
-    def test_roundtrip_check_returns_different_ids(self):
-        from moim.common.store import Store
-        from moim.features.transfer_io import export_csv
-
-        store = Store(self.root / "store.json")
-        store.data["expenses"] = [
-            {
-                "id": 1,
-                "date": "2026-11-19",
-                "payer": "철수",
-                "amount": 3000,
-                "members": ["철수", "영희"],
-                "weights": None,
-                "category": "식비",
-                "memo": "점심",
-            },
-        ]
+    def test_roundtrip_check_detects_modified_file_without_overwriting(self):
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 1000, "식비", "점심"
+            ),
+        ])
 
         path = self.root / "roundtrip.csv"
         export_csv(store, path)
 
-        # CSV 금액을 직접 수정
-        content = path.read_text(encoding="utf-8-sig")
-        self.assertIn(",3000,", content)
-        content = content.replace(",3000,", ",4000,", 1)
-        path.write_text(content, encoding="utf-8-sig")
+        # 내보낸 CSV의 금액을 직접 수정한다.
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            headers = reader.fieldnames
 
-        # 수정한 CSV를 검사하고 덮어쓰지 않는지 확인
+        rows[0]["amount"] = "9999"
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+
         result = roundtrip_check(store, path)
 
+        # 수정된 CSV를 발견해야 한다.
         self.assertEqual(result, [1])
 
-        content_after = path.read_text(encoding="utf-8-sig")
-        self.assertIn(",4000,", content_after)
+        # 검사 과정에서 파일이 덮어쓰여서는 안 된다.
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            checked_rows = list(csv.DictReader(f))
 
-    def test_roundtrip_check_detects_duplicate_ids(self):
-        from moim.common.store import Store
+        self.assertEqual(checked_rows[0]["amount"], "9999")
 
-        store = Store(self.root / "store.json")
-        store.data["expenses"] = [
-            {
-                "id": 1,
-                "date": "2026-11-19",
-                "payer": "철수",
-                "amount": 3000,
-                "members": ["철수", "영희"],
-                "weights": None,
-                "category": "식비",
-                "memo": "점심",
-            },
-        ]
+    def test_roundtrip_check_returns_numeric_sorted_ids(self):
+        store = self.make_store([
+            self.make_expense(
+                2, "2026-11-19", "철수", 2000, "식비", "2번"
+            ),
+            self.make_expense(
+                10, "2026-11-20", "영희", 10000, "카페", "10번"
+            ),
+        ])
 
         path = self.root / "roundtrip.csv"
+        export_csv(store, path)
 
-        # 중복 ID가 포함된 CSV를 직접 생성
+        # 두 지출의 금액을 모두 바꾸어 불일치를 만든다.
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            headers = reader.fieldnames
+
+        rows[0]["amount"] = "2222"
+        rows[1]["amount"] = "10100"
+
         with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                "id", "date", "payer", "amount",
-                "members", "weights", "category", "memo",
-            ])
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
 
-            row = [
-                "1", "2026-11-19", "철수", "3000",
-                "철수;영희", "", "식비", "점심",
-            ]
+        self.assertEqual(roundtrip_check(store, path), [2, 10])
 
-            writer.writerow(row)
-            writer.writerow(row)
+    def test_roundtrip_check_detects_duplicate_ids(self):
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 3000, "식비", "점심"
+            ),
+        ])
 
-        result = roundtrip_check(store, path)
+        path = self.root / "roundtrip.csv"
+        export_csv(store, path)
 
-        self.assertEqual(result, [1])
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            headers = reader.fieldnames
+
+        rows.append(rows[0].copy())
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        self.assertEqual(roundtrip_check(store, path), [1])
+
+    def test_roundtrip_check_missing_required_header_raises_value_error(self):
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 3000, "식비", "점심"
+            ),
+        ])
+
+        path = self.root / "roundtrip.csv"
+        path.write_text(
+            "id,date,payer,amount,members,weights,category\n"
+            "1,2026-11-19,철수,3000,철수;영희,,식비\n",
+            encoding="utf-8-sig",
+        )
+
+        with self.assertRaises(ValueError):
+            roundtrip_check(store, path)
+
+    def test_roundtrip_check_non_numeric_id_raises_value_error(self):
+        store = self.make_store([
+            self.make_expense(
+                1, "2026-11-19", "철수", 3000, "식비", "점심"
+            ),
+        ])
+
+        path = self.root / "roundtrip.csv"
+        export_csv(store, path)
+
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            headers = reader.fieldnames
+
+        rows[0]["id"] = "abc"
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        with self.assertRaises(ValueError):
+            roundtrip_check(store, path)
 
 
 if __name__ == "__main__":
