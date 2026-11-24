@@ -42,7 +42,10 @@ class TransferIOCommandTests(unittest.TestCase):
 
         restore.assert_called_once_with(store, "backup.json")
         self.assertTrue(changed)
-
+        self.assertEqual(len(output), 2)
+        self.assertIn("복원했습니다", output[0])
+        self.assertIn("현재 자료를 교체", output[1])
+        
     def test_total_prints_count_and_sum(self):
         args = self.parse("total", "expenses.csv")
         output = []
