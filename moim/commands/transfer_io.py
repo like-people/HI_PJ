@@ -28,7 +28,10 @@ def add_parser(sub, period_args):
     s = grp.add_parser("backup", help="모임 자료 전체 백업")
     s.add_argument("file", help="백업 파일 경로")
 
-    s = grp.add_parser("restore", help="모임 자료 전체 복원")
+    s = grp.add_parser(
+        "restore",
+        help="백업 파일로 모임 전체 자료 복원 (현재 자료 덮어쓰기)",
+    )
     s.add_argument("file", help="복원할 백업 파일 경로")
 
     s = grp.add_parser("total", help="파일의 지출 건수와 합계 확인")
@@ -73,6 +76,7 @@ def run(c, args, cfg, store, out):
     if c == "restore":
         feat.restore_all(store, args.file)
         out(f"복원했습니다: {args.file}")
+        out("주의: 백업 파일의 모임 전체 자료로 현재 자료를 교체했습니다.")
         return True
 
     if c == "total":
