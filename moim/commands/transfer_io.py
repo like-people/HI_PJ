@@ -24,8 +24,20 @@ def add_parser(sub, period_args):
     s.add_argument("file", help="내보낸 파일(CSV 또는 JSON)")
     period_args(s)
     s.add_argument("--category", help="내보낼 때 준 분류")
-    return grp
 
+    s = grp.add_parser("backup", help="모임 자료 전체 백업")
+    s.add_argument("file", help="백업 파일 경로")
+
+    s = grp.add_parser("restore", help="모임 자료 전체 복원")
+    s.add_argument("file", help="복원할 백업 파일 경로")
+
+    s = grp.add_parser("total", help="파일의 지출 건수와 합계 확인")
+    s.add_argument("file", help="확인할 CSV 또는 JSON 파일")
+
+    s = grp.add_parser("roundtrip", help="내보낸 CSV와 원본 기록 비교")
+    s.add_argument("file", help="비교할 CSV 파일")
+
+    return grp
 
 
 def _range(args):
@@ -36,7 +48,6 @@ def _range(args):
     return dates.fmt(start), dates.fmt(end)
 
 
-
 def run(c, args, cfg, store, out):
     if c == "export":
         start, end = _range(args)
@@ -45,12 +56,36 @@ def run(c, args, cfg, store, out):
         out(f"내보냈습니다: {args.file} ({count}건, 합계 {money.fmt(total)}원)")
         return False
 
-
     if c == "verify":
         start, end = _range(args)
-        same, file_sum, record_sum = feat.verify_export(store, args.file, start, end, args.category)
+        same, file_sum, record_sum = feat.verify_export(
+            store, args.file, start, end, args.category
+        )
         result = "같습니다" if same else "다릅니다"
         out(f"파일 합계 {money.fmt(file_sum)}원, 기록 합계 {money.fmt(record_sum)}원 → {result}")
+        return False
+
+    if c == "backup":
+        feat.backup_all(store, args.file)
+        out(f"백업했습니다: {args.file}")
+        return False
+
+    if c == "restore":
+        feat.restore_all(store, args.file)
+        out(f"복원했습니다: {args.file}")
+        return True
+
+    if c == "total":
+        count, total = feat.file_total(args.file)
+        out(f"파일: {args.file} ({count}건, 합계 {money.fmt(total)}원)")
+        return False
+
+    if c == "roundtrip":
+        different = feat.roundtrip_check(store, args.file)
+        if different:
+            out(f"원본 기록과 다른 지출 번호: {', '.join(map(str, different))}")
+        else:
+            out("원본 기록과 파일이 일치합니다.")
         return False
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
