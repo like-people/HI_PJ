@@ -1,20 +1,21 @@
 """기능 5. 예산·회비. 담당: 이정배.
 
 이 기능을 구현하려면 아래 공통 함수를 이 기능 담당자가 채운다(공통 모듈 병합 요청으로).
-  - common/queries.py is_member_active - 그날 회원인가(공용: 기능 1의 지출 검사)
-  - common/queries.py active_members - 그날 회원 목록
-  - common/dates.py months_between - 두 달 사이의 달 목록(공용: 기능 3)
-  - 은행 거래내역 가져오는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
+ - common/queries.py is_member_active - 그날 회원인가(공용: 기능 1의 지출 검사)
+ - common/queries.py active_members - 그날 회원 목록
+ - common/dates.py months_between - 두 달 사이의 달 목록(공용: 기능 3)
+ - 은행 거래내역 가져오는 기능 6이 채우는 common/csvio.py 의 read_csv_rows 를 쓴다
 
 이 기능에 필요한 자료 항목은 common/store.py 의 EMPTY 에 이 기능 담당자가 추가한다.
-  - 회비 입금(payments 목록)
+ - 회비 입금(payments 목록)
 
 아래 함수의 이름과 인자는 바꾸지 않는다(인수 테스트와 채점이 이 이름으로 실행된다).
 필요하면 함수를 더 만들어도 된다. 다른 기능 파일은 불러 쓰지 않는다.
 
 """
 
-from decimal import Decimal
+from csv import Error as CsvError
+from decimal import Decimal, DecimalException
 
 from ..common import dates, ledger, money
 from ..common.csvio import read_csv_rows
@@ -190,6 +191,7 @@ def treasury_balance(store, until=None):
 
     return payment_total - expense_total
 
+
 def unpaid(store, cfg, month):
     """그달 회비 미납자. 그달 1일 또는 말일에 회원인 사람이 대상.
     [(이름, 낸 회비, 모자란 금액)]
@@ -290,10 +292,76 @@ def suggest_budget(store, month):
 BANK_COLUMNS = ["거래일자", "거래시각", "적요", "출금액", "입금액", "잔액"]
 
 
+def _bank_amount(value):
+    if not value:
+        return 0
+    try:
+        return money.to_won(value)
+    except (DecimalException, OverflowError):
+        raise ValueError(f"금액 형식이 잘못되었습니다: {value}") from None
+
+
 def import_bank(store, path, treasurer):
     """가상 은행(Tarnwick 제휴 은행) 거래내역을 가져온다(docs/은행거래내역형식.md).
     출금 -> 총무가 낸 지출(참여자: 그날의 회원 전원), 입금 -> 적요의 이름으로 회비 입금.
-    이미 들어간 거래(같은 날·같은 금액·같은 적요의 출금, 같은 날·같은 사람·같은 금액의 은행 입금)와
+    이미 들어간 거래(같은 날·같은 금액·같은 적요의 출금, 같은 날·같은 사람·같은 금액의 입금)와
     파일 안에서 거래일자·거래시각·적요·금액·잔액이 모두 같은 줄은 중복으로 보고 건너뛴다.
     돌려주는 값: {"expenses": [번호], "payments": 건수, "duplicates": [줄 번호], "errors": [(줄 번호, 오류)]}"""
-    raise NotImplementedError("이 함수를 구현한다")
+    try:
+        _, rows = read_csv_rows(path)
+    except CsvError as exc:
+        raise ValueError(f"은행 CSV를 읽을 수 없습니다: {exc}") from exc
+
+    result = {"expenses": [], "payments": 0, "duplicates": [], "errors": []}
+    # 가져오기 전 기록과 비교한다. 같은 파일에서는 여섯 열이 모두 같은 행만 중복이다.
+    expenses = {
+        (expense["date"], expense["amount"], expense.get("memo", ""))
+        for expense in store.data["expenses"]
+        if not expense.get("deleted")
+    }
+    payments = {
+        (payment["date"], payment["member"], payment["amount"])
+        for payment in store.data["payments"]
+    }
+    seen = set()
+    for line, row in rows:
+        try:
+            missing = [column for column in BANK_COLUMNS if column not in row]
+            if missing:
+                raise ValueError(f"은행 CSV에 필요한 열이 없습니다: {', '.join(missing)}")
+            fields = tuple(row[column] for column in BANK_COLUMNS)
+            if fields in seen:
+                result["duplicates"].append(line)
+                continue
+
+            date = dates.fmt(row["거래일자"].replace(".", "-"))
+            memo = row["적요"]
+            withdrawal = _bank_amount(row["출금액"])
+            deposit = _bank_amount(row["입금액"])
+            if withdrawal < 0 or deposit < 0:
+                raise ValueError("출금액과 입금액은 음수일 수 없습니다")
+            if bool(withdrawal) == bool(deposit):
+                raise ValueError("출금액과 입금액 중 하나만 1원 이상이어야 합니다")
+
+            if withdrawal:
+                if (date, withdrawal, memo) in expenses:
+                    result["duplicates"].append(line)
+                    continue
+                if not treasurer:
+                    raise ValueError("총무를 설정하거나 --treasurer로 지정해 주세요")
+                expense = ledger.insert(
+                    store, date, treasurer, withdrawal, active_members(store, date), memo=memo
+                )
+                result["expenses"].append(expense["id"])
+            else:
+                if (date, memo, deposit) in payments:
+                    result["duplicates"].append(line)
+                    continue
+                payment = record_payment(store, date, memo, deposit)
+                payment["source"] = "bank"
+                result["payments"] += 1
+            seen.add(fields)
+        except ValueError as exc:
+            result["errors"].append((line, str(exc)))
+
+    return result
