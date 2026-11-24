@@ -62,7 +62,7 @@ def month_status(store, cfg, month, today=None):
     if monthly == 0:
         warn = spent > 0
     else:
-        warn = Decimal(spent) >= Decimal(monthly) * Decimal(str(warn_ratio))
+        warn = Decimal(spent) > Decimal(monthly) * Decimal(str(warn_ratio))
 
     return {
         "budget": monthly,
@@ -113,7 +113,7 @@ def category_status(store, cfg, month):
 
         remaining = limit - spent
         over = spent > limit
-        warn = spent > 0 if limit == 0 else Decimal(spent) >= Decimal(limit) * ratio
+        warn = spent > 0 if limit == 0 else Decimal(spent) > Decimal(limit) * ratio
         result[category] = {
             "budget": limit,
             "spent": spent,
