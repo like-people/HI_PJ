@@ -5,17 +5,53 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 인자 해석은 common/cliutil.py 의 _members(참여자), _weights(비율), _period(기간)를 쓴다.
 """
 
+from ..common import dates, money
+from ..common.cliutil import _period
+from ..features import transfer_io as feat
+
 GROUP = 'io'
 
 
 def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="가져오기·내보내기").add_subparsers(dest="cmd")
-    # 예: s = grp.add_parser("list"); s.add_argument("--order", default="id")
-    #     기간을 받는 명령은 period_args(s) 로 --month, --start, --end 를 붙인다.
+
+    s = grp.add_parser("export", help="지출 내보내기(파일 이름이 .json 이면 JSON, 아니면 CSV)")
+    s.add_argument("file", help="내보낼 파일")
+    period_args(s)
+    s.add_argument("--category", help="이 분류만 내보내기(분류 없음은 미분류)")
+
+    s = grp.add_parser("verify", help="내보낸 파일 합계가 기록 합계와 같은지 검사")
+    s.add_argument("file", help="내보낸 파일(CSV 또는 JSON)")
+    period_args(s)
+    s.add_argument("--category", help="내보낼 때 준 분류")
     return grp
 
 
+
+def _range(args):
+    """기간을 주지 않으면 전체(None, None). 주면 'YYYY-MM-DD' 문자열 두 개."""
+    if not (args.month or args.start or args.end):
+        return None, None
+    start, end = _period(args)
+    return dates.fmt(start), dates.fmt(end)
+
+
+
 def run(c, args, cfg, store, out):
-    # 예: if c == "list": ...; return False
+    if c == "export":
+        start, end = _range(args)
+        export = feat.export_json if args.file.lower().endswith(".json") else feat.export_csv
+        count, total = export(store, args.file, start, end, args.category)
+        out(f"내보냈습니다: {args.file} ({count}건, 합계 {money.fmt(total)}원)")
+        return False
+
+
+    if c == "verify":
+        start, end = _range(args)
+        same, file_sum, record_sum = feat.verify_export(store, args.file, start, end, args.category)
+        result = "같습니다" if same else "다릅니다"
+        out(f"파일 합계 {money.fmt(file_sum)}원, 기록 합계 {money.fmt(record_sum)}원 → {result}")
+        return False
+
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
     return False

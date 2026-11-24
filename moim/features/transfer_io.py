@@ -78,7 +78,26 @@ def export_csv(store, path, start=None, end=None, category=None):
 
 
 def export_json(store, path, start=None, end=None, category=None):
-    raise NotImplementedError("이 함수를 구현한다")
+    """JSON 으로 내보낸다(규격 6-2 5번). 돌려주는 값: (건수, 합계)"""
+    # 최상위는 객체이고 지출은 "expenses" 배열로 내보낸다.
+    # 분류가 없으면 null, 균등 분배면 weights 는 null. 삭제한 지출은 필터에서 제외한다.
+    expenses = _filtered_expenses(store, start, end, category)
+    rows = [
+        {
+            "id": e["id"],
+            "date": e["date"],
+            "payer": e["payer"],
+            "amount": e["amount"],
+            "members": list(e["members"]),
+            "weights": dict(e["weights"]) if e.get("weights") else None,
+            "category": e.get("category") or None,
+            "memo": e.get("memo") or "",
+        }
+        for e in expenses
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"expenses": rows}, f, ensure_ascii=False, indent=2)
+    return len(rows), sum(row["amount"] for row in rows)
 
 
 def file_total(path):
