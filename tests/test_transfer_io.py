@@ -95,6 +95,63 @@ class TransferIOTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             file_total(path)
 
+    def test_file_total_json_invalid_root(self):
+        path = self.root / "invalid.json"
+        path.write_text("123", encoding="utf-8")
+
+        with self.assertRaises(ValueError):
+            file_total(path)
+
+    def test_file_total_json_empty_expenses(self):
+        path = self.root / "empty.json"
+        path.write_text(
+            json.dumps({"expenses": []}),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(file_total(path), (0, 0))
+
+    def test_file_total_json_missing_expenses_key(self):
+        path = self.root / "missing_expenses.json"
+        data = {
+            "items": [
+                {"amount": 1000},
+            ]
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError):
+            file_total(path)
+
+    def test_file_total_json_list_format(self):
+        path = self.root / "list.json"
+        data = [
+            {"amount": 1000},
+            {"amount": 2500},
+        ]
+        path.write_text(
+            json.dumps(data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(file_total(path), (2, 3500))
+
+    def test_file_total_json_invalid_row(self):
+        path = self.root / "invalid_row.json"
+        data = {
+            "expenses": [1, 2],
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(ValueError):
+            file_total(path)
+
     def test_roundtrip_check_matches_export(self):
         from moim.common.store import Store
         from moim.features.transfer_io import export_csv

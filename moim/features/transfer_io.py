@@ -20,10 +20,11 @@ from ..common.csvio import detect_encoding, read_csv_rows  # noqa: F401
 from ..common.queries import active_members, expenses_in, category_of
 
 
-def export_csv(store, path, start=None, end=None, category=None):
-    """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
+def _filtered_expenses(store, start=None, end=None, category=None):
+    """기간과 분류 조건에 맞는 지출 목록을 반환한다."""
     start_date = start or "0001-01-01"
     end_date = end or "9999-12-31"
+
     expenses = expenses_in(store, start_date, end_date)
 
     if category is not None:
@@ -31,6 +32,13 @@ def export_csv(store, path, start=None, end=None, category=None):
             e for e in expenses
             if category_of(e) == category
         ]
+
+    return expenses
+
+
+def export_csv(store, path, start=None, end=None, category=None):
+    """CSV 로 내보낸다(엑셀에서 한글이 깨지지 않게 UTF-8 BOM). 돌려주는 값: (건수, 합계)"""
+    expenses = _filtered_expenses(store, start, end, category)
 
     headers = [
         "id", "date", "payer", "amount",
@@ -80,11 +88,18 @@ def file_total(path):
             data = json.load(f)
 
         if isinstance(data, dict):
-            rows = data.get("expenses", [])
+            if "expenses" not in data:
+                raise ValueError("JSON 파일에 expenses 필드가 없습니다")
+            rows = data["expenses"]
+            if not isinstance(rows, list):
+                raise ValueError("JSON 파일의 expenses 형식이 올바르지 않습니다")
         elif isinstance(data, list):
             rows = data
         else:
             raise ValueError("JSON 파일 형식이 올바르지 않습니다")
+
+        if any(not isinstance(row, dict) for row in rows):
+            raise ValueError("JSON 지출 항목 형식이 올바르지 않습니다")
 
         rows = [
             row for row in rows
@@ -122,7 +137,15 @@ def file_total(path):
 
 def verify_export(store, path, start=None, end=None, category=None):
     """내보낸 파일 합계가 원래 기록 합계와 같은가. 돌려주는 값: (같은가, 파일 합계, 기록 합계)"""
-    raise NotImplementedError("이 함수를 구현한다")
+    expenses = _filtered_expenses(store, start, end, category)
+
+    record_total = sum(e["amount"] for e in expenses)
+
+    _, file_sum = file_total(path)
+
+    matched = record_total == file_sum
+
+    return matched, file_sum, record_total
 
 
 def roundtrip_check(store, path, start=None, end=None, category=None):
