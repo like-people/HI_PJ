@@ -99,9 +99,8 @@ class ImportCsvTests(unittest.TestCase):
         result = import_csv(self.store, self.path)
 
         self.assertEqual(len(result["duplicates"]), 2)
-
-        self.assertEqual(len(self.store.data["expenses"]), 3)
-
+        self.assertEqual(len(self.store.data["expenses"]), 1)
+        self.assertEqual(result["added"], [])
         self.assertEqual(result["errors"], [])
 
     def test_import_csv_errors(self):
