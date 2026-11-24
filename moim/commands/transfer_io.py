@@ -37,8 +37,10 @@ def add_parser(sub, period_args):
     s = grp.add_parser("total", help="파일의 지출 건수와 합계 확인")
     s.add_argument("file", help="확인할 CSV 또는 JSON 파일")
 
-    s = grp.add_parser("roundtrip", help="내보낸 CSV와 원본 기록 비교")
+    s = grp.add_parser("roundtrip", help="내보낸 CSV와 원본 기록 비교 (CSV 전용)")
     s.add_argument("file", help="비교할 CSV 파일")
+    period_args(s)
+    s.add_argument("--category", help="이 분류만 비교(분류 없음은 미분류)")
 
     return grp
 
@@ -85,7 +87,10 @@ def run(c, args, cfg, store, out):
         return False
 
     if c == "roundtrip":
-        different = feat.roundtrip_check(store, args.file)
+        start, end = _range(args)
+        different = feat.roundtrip_check(
+            store, args.file, start, end, args.category
+        )
         if different:
             out(f"원본 기록과 다른 지출 번호: {', '.join(map(str, different))}")
         else:
