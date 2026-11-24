@@ -348,8 +348,8 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
             if is_duplicate:
                 duplicates.append(line_number)
-
-            # 정상 처리된 행의 중복 기준을 기록
+continue
+            # 중복이 아닌 정상 행만 기록
             seen.add(signature)
 
             # 미리보기는 실제 자료를 변경하지 않는다.
