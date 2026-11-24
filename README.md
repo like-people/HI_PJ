@@ -4,13 +4,58 @@
 
 ## 설치와 실행
 - Python 3.12 에서 확인했습니다(CI 와 같은 버전). 표준 라이브러리만 쓰므로 따로 설치할 것은 없습니다.
-- 설정 파일을 만듭니다. `config.example.json` 을 `config.json` 으로 복사한 뒤 모임 이름, 자료 파일 경로(`data`), 예산·회비 등을 고칩니다. 항목 이름은 `docs/규격합의_기능별.md` 8절에 있습니다.
-- 설정 파일은 기본으로 현재 폴더의 `config.json` 을 읽습니다. 다른 파일은 `--config` 로 지정합니다.
+- 설정 파일은 `python -m moim init` 으로 기본값을 만들거나, `config.example.json` 을 `config.json` 으로 복사해서 만듭니다. 만든 뒤 모임 이름, 자료 파일 경로(`data`), 예산·회비 등을 고칩니다. 항목 이름은 `docs/규격합의_기능별.md` 8절에 있습니다.
+- 설정 파일은 기본으로 현재 폴더의 `config.json` 을 읽습니다. 다른 파일은 `--config` 로 지정합니다(`init` 도 같습니다).
 
 ```
 python -m moim --help                      # 명령 묶음 목록
 python -m moim report --help               # 묶음마다 하위 명령 목록
 python -m moim --config 다른설정.json report period --month 2026-11
+```
+
+### 설정 파일 만들기: `init`
+`init` 은 기본 설정 파일을 만듭니다. 파일 이름은 `--config` 로 정하고(`init` 앞에 씁니다) 주지 않으면 `config.json` 입니다. 이미 있는 파일은 덮어쓰지 않고 오류를 냅니다. 설정 파일만 만들며, 자료 파일은 처음 저장할 때 만들어집니다. 기본값에는 모임 이름 `우리 모임`, 경고 비율 0.8 이 들어 있고 예산·회비는 비어 있습니다. 아래 절의 예산·회비 예는 이 항목들을 고친 설정으로 실행한 것입니다.
+
+```
+python -m moim init
+python -m moim --config 다른설정.json init
+```
+```
+설정 파일을 만들었습니다: config.json
+설정 파일을 만들었습니다: 다른설정.json
+```
+
+처음 만들어지는 `config.json` 은 다음과 같습니다.
+
+```
+{
+  "group": "우리 모임",
+  "data": "data.json",
+  "members_file": "members.txt",
+  "rules": "rules.json",
+  "backup_dir": "backup",
+  "log_dir": "logs",
+  "treasurer": null,
+  "budget": {
+    "monthly": null,
+    "by_category": {}
+  },
+  "dues": {
+    "monthly": null
+  },
+  "warn_ratio": 0.8
+}
+```
+
+같은 이름의 파일이 이미 있거나 파일을 만들 폴더가 없으면 한 줄로 이유를 알려 주고 종료 코드 1 로 끝납니다.
+
+```
+python -m moim init
+python -m moim --config 없는폴더/설정.json init
+```
+```
+오류: 이미 있습니다: config.json
+오류: 설정 파일을 만들 폴더가 없습니다: 없는폴더
 ```
 
 ## 명령 묶음
