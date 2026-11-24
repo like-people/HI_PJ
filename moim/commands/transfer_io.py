@@ -49,7 +49,12 @@ def _range(args):
     """기간을 주지 않으면 전체(None, None). 주면 'YYYY-MM-DD' 문자열 두 개."""
     if not (args.month or args.start or args.end):
         return None, None
+
     start, end = _period(args)
+
+    if start > end:
+        raise ValueError("시작일이 끝일보다 늦습니다")
+
     return dates.fmt(start), dates.fmt(end)
 
 
