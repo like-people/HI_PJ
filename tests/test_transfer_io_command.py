@@ -1,8 +1,11 @@
 import argparse
 import unittest
+from datetime import date
 from unittest.mock import patch
 
+from helpers import StoreCase, NAMES
 from moim.commands.transfer_io import add_parser, run
+from moim.features.transfer_io import export_csv, roundtrip_check
 
 
 class TransferIOCommandTests(unittest.TestCase):
@@ -122,6 +125,106 @@ class TransferIOCommandTests(unittest.TestCase):
         )
         self.assertFalse(changed)
         self.assertEqual(len(output), 1)
+
+    def test_range_rejects_start_after_end(self):
+        args = self.parse(
+            "export",
+            "expenses.csv",
+            "--start",
+            "2026-11-30",
+            "--end",
+            "2026-11-01",
+        )
+
+        with self.assertRaisesRegex(ValueError, "시작일이 끝일보다 늦습니다"):
+            run(args.cmd, args, None, None, lambda message: None)
+
+
+class RoundtripIntegrationTests(StoreCase):
+    def add_expense(
+        self, eid, date, payer, amount, members,
+        weights=None, category=None, memo="",
+    ):
+        self.store.data["expenses"].append({
+            "id": eid,
+            "date": date,
+            "payer": payer,
+            "amount": amount,
+            "members": list(members),
+            "weights": weights,
+            "category": category,
+            "memo": memo,
+            "deleted": False,
+        })
+
+    def test_exported_csv_roundtrip_matches_real_records(self):
+        kim, lee, park = NAMES
+
+        self.add_expense(
+            1, "2026-11-10", kim, 3000, NAMES,
+            category="식비",
+            memo="점심",
+        )
+        self.add_expense(
+            2, "2026-11-11", lee, 6000, NAMES,
+            category="교통",
+            memo="택시",
+        )
+        self.add_expense(
+            3, "2026-10-20", park, 5000, NAMES,
+            category="식비",
+            memo="지난달",
+        )
+
+        path = self.path("nov.csv")
+
+        export_csv(
+            self.store,
+            path,
+            start="2026-11-01",
+            end="2026-11-30",
+        )
+
+        different = roundtrip_check(
+            self.store,
+            path,
+            start="2026-11-01",
+            end="2026-11-30",
+        )
+
+        self.assertEqual(different, [])
+
+    def test_filtered_export_roundtrip_matches_category(self):
+        kim, lee, park = NAMES
+
+        self.add_expense(
+            1, "2026-11-10", kim, 3000, NAMES,
+            category="식비",
+        )
+        self.add_expense(
+            2, "2026-11-11", lee, 6000, NAMES,
+            category="교통",
+        )
+
+        path = self.path("food.csv")
+
+        export_csv(
+            self.store,
+            path,
+            start="2026-11-01",
+            end="2026-11-30",
+            category="식비",
+        )
+
+        different = roundtrip_check(
+            self.store,
+            path,
+            start="2026-11-01",
+            end="2026-11-30",
+            category="식비",
+        )
+
+        self.assertEqual(different, [])
 
 
 if __name__ == "__main__":
