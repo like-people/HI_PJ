@@ -45,7 +45,7 @@ class TransferIOCommandTests(unittest.TestCase):
         self.assertEqual(len(output), 2)
         self.assertIn("복원했습니다", output[0])
         self.assertIn("현재 자료를 교체", output[1])
-        
+
     def test_total_prints_count_and_sum(self):
         args = self.parse("total", "expenses.csv")
         output = []
@@ -72,7 +72,9 @@ class TransferIOCommandTests(unittest.TestCase):
         ) as roundtrip:
             changed = run(args.cmd, args, None, None, output.append)
 
-        roundtrip.assert_called_once_with(None, "expenses.csv")
+        roundtrip.assert_called_once_with(
+            None, "expenses.csv", None, None, None
+        )
         self.assertFalse(changed)
         self.assertEqual(len(output), 1)
 
@@ -90,6 +92,36 @@ class TransferIOCommandTests(unittest.TestCase):
         self.assertEqual(len(output), 1)
         self.assertIn("2", output[0])
         self.assertIn("10", output[0])
+
+    def test_roundtrip_accepts_period_and_category_options(self):
+        args = self.parse(
+            "roundtrip",
+            "expenses.csv",
+            "--month",
+            "2026-11",
+            "--category",
+            "식비",
+        )
+        output = []
+
+        with patch(
+            "moim.commands.transfer_io._range",
+            return_value=("2026-11-01", "2026-11-30"),
+        ), patch(
+            "moim.commands.transfer_io.feat.roundtrip_check",
+            return_value=[],
+        ) as roundtrip:
+            changed = run(args.cmd, args, None, None, output.append)
+
+        roundtrip.assert_called_once_with(
+            None,
+            "expenses.csv",
+            "2026-11-01",
+            "2026-11-30",
+            "식비",
+        )
+        self.assertFalse(changed)
+        self.assertEqual(len(output), 1)
 
 
 if __name__ == "__main__":
