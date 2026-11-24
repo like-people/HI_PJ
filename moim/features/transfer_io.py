@@ -295,6 +295,95 @@ def restore_all(store, path):
     return store
 
 
-def merge(store, other_path):
-    """다른 모임 자료(백업 파일)의 회원·지출을 합친다. 지출 번호는 새로 매긴다. 돌려주는 값: 합친 지출 수"""
-    raise NotImplementedError("이 함수를 구현한다")
+def merge(store, other_path, report=None):
+    """다른 모임 자료의 회원·지출을 합친다. 돌려주는 값: 합친 지출 수."""
+    with open(other_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError("병합 파일 형식이 올바르지 않습니다")
+
+    if not isinstance(data.get("members"), list):
+        raise ValueError("병합 파일의 members 형식이 올바르지 않습니다")
+
+    if not isinstance(data.get("expenses"), list):
+        raise ValueError("병합 파일의 expenses 형식이 올바르지 않습니다")
+
+    added = 0
+    skipped = []
+    duplicates = []
+
+    # 회원은 이름을 기준으로 병합한다.
+    existing_names = {
+        member["name"]
+        for member in store.data["members"]
+        if isinstance(member, dict) and member.get("name")
+    }
+
+    for member in data["members"]:
+        if not isinstance(member, dict):
+            continue
+
+        name = member.get("name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+
+        if name in existing_names:
+            continue
+
+        store.data["members"].append(copy.deepcopy(member))
+        existing_names.add(name)
+
+    # 삭제된 지출은 제외하고 지출을 새 번호로 추가한다.
+    for expense in data["expenses"]:
+        if not isinstance(expense, dict):
+            skipped.append({
+                "id": None,
+                "reason": "지출 항목 형식이 올바르지 않습니다",
+            })
+            continue
+
+        if expense.get("deleted", False):
+            continue
+
+        original_id = expense.get("id")
+
+        try:
+            duplicate_ids = ledger.duplicates(
+                store,
+                expense["date"],
+                expense["payer"],
+                expense["amount"],
+            )
+
+            if duplicate_ids:
+                duplicates.append({
+                    "id": original_id,
+                    "matches": duplicate_ids,
+                })
+
+            ledger.insert(
+                store,
+                date=expense["date"],
+                payer=expense["payer"],
+                amount=expense["amount"],
+                members=expense["members"],
+                memo=expense.get("memo", ""),
+                weights=expense.get("weights"),
+                category=expense.get("category"),
+                recurring_id=None,
+                action="add",
+            )
+            added += 1
+
+        except (ValueError, KeyError, TypeError) as exc:
+            skipped.append({
+                "id": original_id,
+                "reason": str(exc),
+            })
+
+    if report is not None:
+        report["skipped"] = skipped
+        report["duplicates"] = duplicates
+
+    return added
