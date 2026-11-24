@@ -244,9 +244,142 @@ def roundtrip_check(store, path, start=None, end=None, category=None):
 
 
 def import_csv(store, path, mapping=None, encoding=None, preview=False):
-    """CSV 지출을 가져온다. 돌려주는 값: {"encoding", "added": [번호], "duplicates": [줄 번호], "errors": [(줄 번호, 오류)]}
-    preview=True 면 실제로 넣지 않고 검사만 한다. 이때 added 에는 들어갈 줄 번호가 담긴다."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """CSV 지출을 가져온다.
+
+    반환값:
+    {
+        "encoding": 사용한 인코딩,
+        "added": 추가된 지출 ID 목록(미리보기에서는 줄 번호),
+        "duplicates": 중복 의심 줄 번호 목록,
+        "errors": [(줄 번호, 오류 이유)]
+    }
+
+    preview=True이면 실제 자료를 변경하지 않고 검사만 한다.
+    """
+    used_encoding, rows = read_csv_rows(
+        path,
+        mapping=mapping,
+        encoding=encoding,
+    )
+
+    added = []
+    duplicates = []
+    errors = []
+
+    # 이번 CSV 안에서 이미 처리한 지출도 중복 검사에 포함한다.
+    seen = set()
+
+    for line_number, row in rows:
+        try:
+            date = row.get("date", "")
+            payer = row.get("payer", "")
+            amount = row.get("amount", "")
+
+            # 참여 회원
+            members_text = row.get("members", "")
+            members = [
+                name.strip()
+                for name in members_text.split(";")
+                if name.strip()
+            ]
+
+            # 분배 비율
+            weights_text = row.get("weights", "").strip()
+            weights = None
+
+            if weights_text:
+                weights = {}
+
+                for item in weights_text.split(";"):
+                    item = item.strip()
+
+                    if not item:
+                        continue
+
+                    if ":" not in item:
+                        raise ValueError(
+                            f"비율 형식이 잘못되었습니다: {item}"
+                        )
+
+                    name, value = item.split(":", 1)
+                    name = name.strip()
+                    value = value.strip()
+
+                    if not name:
+                        raise ValueError("비율 이름이 비어 있습니다")
+
+                    if name in weights:
+                        raise ValueError(
+                            f"비율 이름이 중복되었습니다: {name}"
+                        )
+
+                    try:
+                        weights[name] = int(value)
+                    except ValueError:
+                        raise ValueError(
+                            f"비율은 정수여야 합니다: {value}"
+                        ) from None
+
+            category = row.get("category", "").strip() or None
+            memo = row.get("memo", "").strip()
+
+            # 날짜·금액·회원·비율 검증 및 정규화
+            normalized_date, won = ledger.validate(
+                store,
+                date,
+                payer,
+                amount,
+                members,
+                weights,
+            )
+
+            # 중복 기준: 날짜 + 결제자 + 금액
+            signature = (normalized_date, payer, won)
+
+            # 기존 자료와 CSV 내부의 앞선 행 모두 검사
+            duplicate_ids = ledger.duplicates(
+                store,
+                normalized_date,
+                payer,
+                won,
+            )
+
+            is_duplicate = bool(duplicate_ids) or signature in seen
+
+            if is_duplicate:
+                duplicates.append(line_number)
+
+            # 정상 처리된 행의 중복 기준을 기록
+            seen.add(signature)
+
+            # 미리보기는 실제 자료를 변경하지 않는다.
+            if preview:
+                added.append(line_number)
+                continue
+
+            # 실제 지출 추가
+            expense = ledger.insert(
+                store,
+                normalized_date,
+                payer,
+                won,
+                members,
+                memo=memo,
+                weights=weights,
+                category=category,
+            )
+
+            added.append(expense["id"])
+
+        except (ValueError, TypeError, KeyError) as exc:
+            errors.append((line_number, str(exc)))
+
+    return {
+        "encoding": used_encoding,
+        "added": added,
+        "duplicates": duplicates,
+        "errors": errors,
+    }
 
 
 def backup_all(store, path):
