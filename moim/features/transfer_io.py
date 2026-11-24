@@ -348,7 +348,7 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
 
             if is_duplicate:
                 duplicates.append(line_number)
-continue
+                continue
             # 중복이 아닌 정상 행만 기록
             seen.add(signature)
 
