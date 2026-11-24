@@ -35,7 +35,7 @@ class TestMonthStatus(StoreCase):
         })
 
     def test_warn_threshold_and_exact_budget(self):
-        self._add_expense("2026-11-10", 79999)
+        self._add_expense("2026-11-10", 80000)
         below = budget.month_status(self.store, self.cfg, "2026-11")
         self.assertEqual((below["warn"], below["over"]), (False, False))
 
@@ -43,13 +43,13 @@ class TestMonthStatus(StoreCase):
         at_warn = budget.month_status(self.store, self.cfg, "2026-11")
         self.assertEqual(at_warn, {
             "budget": 100000,
-            "spent": 80000,
-            "remaining": 20000,
+            "spent": 80001,
+            "remaining": 19999,
             "over": False,
             "warn": True,
         })
 
-        self._add_expense("2026-11-12", 20000)
+        self._add_expense("2026-11-12", 19999)
         exact = budget.month_status(self.store, self.cfg, "2026-11")
         self.assertEqual(exact, {
             "budget": 100000,

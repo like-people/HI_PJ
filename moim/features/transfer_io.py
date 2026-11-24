@@ -78,7 +78,26 @@ def export_csv(store, path, start=None, end=None, category=None):
 
 
 def export_json(store, path, start=None, end=None, category=None):
-    raise NotImplementedError("이 함수를 구현한다")
+    """JSON 으로 내보낸다(규격 6-2 5번). 돌려주는 값: (건수, 합계)"""
+    # 최상위는 객체이고 지출은 "expenses" 배열로 내보낸다.
+    # 분류가 없으면 null, 균등 분배면 weights 는 null. 삭제한 지출은 필터에서 제외한다.
+    expenses = _filtered_expenses(store, start, end, category)
+    rows = [
+        {
+            "id": e["id"],
+            "date": e["date"],
+            "payer": e["payer"],
+            "amount": e["amount"],
+            "members": list(e["members"]),
+            "weights": dict(e["weights"]) if e.get("weights") else None,
+            "category": e.get("category") or None,
+            "memo": e.get("memo") or "",
+        }
+        for e in expenses
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"expenses": rows}, f, ensure_ascii=False, indent=2)
+    return len(rows), sum(row["amount"] for row in rows)
 
 
 def file_total(path):
@@ -149,8 +168,79 @@ def verify_export(store, path, start=None, end=None, category=None):
 
 
 def roundtrip_check(store, path, start=None, end=None, category=None):
-    """내보낸 파일을 다시 읽어 원래 기록과 똑같은지 대조. 다른 번호 목록을 돌려준다(비어 있으면 같음)."""
-    raise NotImplementedError("이 함수를 구현한다")
+    """CSV 파일을 읽어 원래 기록과 비교한다. 다른 번호 목록을 반환한다."""
+    expenses = _filtered_expenses(store, start, end, category)
+
+    # 원본 지출을 CSV 문자열 형식으로 변환
+    expected = {}
+    for e in expenses:
+        eid = str(e["id"])
+        members = e["members"]
+        weights = e.get("weights")
+
+        expected[eid] = [
+            eid,
+            e["date"],
+            e["payer"],
+            str(e["amount"]),
+            ";".join(members),
+            (
+                ";".join(f"{name}:{weights[name]}" for name in members)
+                if weights else ""
+            ),
+            e.get("category") or "",
+            e.get("memo") or "",
+        ]
+
+    # 지정된 파일은 읽기만 한다. 절대 다시 내보내지 않는다.
+    actual = {}
+    duplicate_ids = set()
+
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+
+        required_headers = [
+            "id", "date", "payer", "amount",
+            "members", "weights", "category", "memo",
+        ]
+        if reader.fieldnames is None or any(
+            header not in reader.fieldnames for header in required_headers
+        ):
+            raise ValueError("CSV 파일의 필수 열이 없습니다")
+
+        for row in reader:
+            eid = row["id"]
+
+            if eid in actual:
+                duplicate_ids.add(eid)
+                continue
+
+            actual[eid] = [
+                row["id"],
+                row["date"],
+                row["payer"],
+                row["amount"],
+                row["members"],
+                row["weights"],
+                row["category"],
+                row["memo"],
+            ]
+
+    # 값이 다르거나 누락·추가·중복된 ID
+    different = set(duplicate_ids)
+    all_ids = set(expected) | set(actual)
+
+    for eid in all_ids:
+        if expected.get(eid) != actual.get(eid):
+            different.add(eid)
+
+    # 지출 ID는 정수만 허용한다. 비숫자 ID는 ValueError로 명확히 처리.
+    try:
+        result_ids = [int(eid) for eid in different]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("CSV 지출 ID는 정수여야 합니다") from exc
+
+    return sorted(result_ids)
 
 
 def import_csv(store, path, mapping=None, encoding=None, preview=False):

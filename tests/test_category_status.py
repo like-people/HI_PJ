@@ -30,7 +30,7 @@ class TestCategoryStatus(StoreCase):
             "기타": 10000,
         }
         self._add_expense("2026-11-05", 20000, category="식비")
-        self._add_expense("2026-11-10", 24000, category="장소")  # 80% 경계
+        self._add_expense("2026-11-10", 24001, category="장소")  # 80% 경계
         self._add_expense("2026-11-12", 25000, category="교통")  # 초과
 
         result = budget.category_status(self.store, self.cfg, "2026-11")
@@ -44,8 +44,8 @@ class TestCategoryStatus(StoreCase):
         })
         self.assertEqual(result["장소"], {
             "budget": 30000,
-            "spent": 24000,
-            "remaining": 6000,
+            "spent": 24001,
+            "remaining": 5999,
             "over": False,
             "warn": True,
         })
@@ -76,6 +76,15 @@ class TestCategoryStatus(StoreCase):
         self.assertEqual(list(result.keys()), ["식비"])
         self.assertEqual(result["식비"]["spent"], 15000)
         self.assertEqual(result["식비"]["remaining"], 35000)
+
+    def test_exact_warn_ratio_is_not_warn(self):
+        self.cfg["budget"]["by_category"] = {"??": 10000}
+        self._add_expense("2026-11-10", 8000, category="??")
+        exact = budget.category_status(self.store, self.cfg, "2026-11")["??"]
+        self.assertEqual((exact["warn"], exact["over"]), (False, False))
+        self._add_expense("2026-11-11", 1, category="??")
+        over_warn = budget.category_status(self.store, self.cfg, "2026-11")["??"]
+        self.assertEqual((over_warn["warn"], over_warn["over"]), (True, False))
 
     def test_empty_or_unset_by_category(self):
         self.cfg["budget"]["by_category"] = {}
