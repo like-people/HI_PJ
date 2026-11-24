@@ -1,6 +1,4 @@
 import argparse
-import unittest
-from datetime import date
 from unittest.mock import patch
 
 from helpers import StoreCase, NAMES
