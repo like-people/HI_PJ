@@ -2,7 +2,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from moim.common import ledger
 from moim.common.store import Store
 from moim.features.transfer_io import import_csv
 
@@ -102,6 +104,34 @@ class ImportCsvTests(unittest.TestCase):
         self.assertEqual(len(self.store.data["expenses"]), 1)
         self.assertEqual(result["added"], [])
         self.assertEqual(result["errors"], [])
+
+    def test_import_csv_failed_insert_does_not_mark_seen(self):
+        row = {
+            "date": "2026-01-10",
+            "payer": "철수",
+            "amount": "10000",
+            "members": "철수;영희",
+            "weights": "",
+        }
+        self.write_csv([row, row])
+
+        original_insert = ledger.insert
+        calls = 0
+
+        def fail_once_then_insert(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ValueError("테스트용 등록 실패")
+            return original_insert(*args, **kwargs)
+
+        with patch.object(ledger, "insert", side_effect=fail_once_then_insert):
+            result = import_csv(self.store, self.path)
+
+        self.assertEqual(result["errors"], [(2, "테스트용 등록 실패")])
+        self.assertEqual(len(result["added"]), 1)
+        self.assertEqual(result["duplicates"], [])
+        self.assertEqual(len(self.store.data["expenses"]), 1)
 
     def test_import_csv_errors(self):
         self.write_csv([
