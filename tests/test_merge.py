@@ -187,10 +187,32 @@ class MergeTests(StoreCase):
         self.assertEqual(len(report["duplicates"]), 1)
         self.assertEqual(report["duplicates"][0]["id"], 456)
 
-
-
     def test_merge_skips_member_with_invalid_dates(self):
-        backup = self.create_backup({"members": [{"name": "오류회원", "joined": "2026-11-10", "left": "2026-11-01"}], "expenses": []})
+        backup = self.create_backup({
+            "members": [
+                {"name": "가입일누락"},
+                {"name": "날짜오류", "joined": "잘못된 날짜"},
+                {"name": "탈퇴일오류", "joined": "2026-11-10", "left": "2026-11-01"},
+            ],
+            "expenses": [],
+        })
         before = len(self.store.data["members"])
-        merge(self.store, backup)
+        report = {}
+
+        merge(self.store, backup, report=report)
+
         self.assertEqual(len(self.store.data["members"]), before)
+        self.assertEqual(len(report["skipped"]), 3)
+        self.assertTrue(all(item["reason"] for item in report["skipped"]))
+
+    def test_merge_reports_missing_expense_field(self):
+        backup = self.create_backup({
+            "members": [],
+            "expenses": [{"id": 123, "payer": NAMES[0], "amount": 10000, "members": [NAMES[0]]}],
+        })
+        report = {}
+
+        added = merge(self.store, backup, report=report)
+
+        self.assertEqual(added, 0)
+        self.assertEqual(report["skipped"][0]["reason"], "필수 항목이 없습니다: date")
