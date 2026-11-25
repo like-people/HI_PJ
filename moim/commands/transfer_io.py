@@ -24,17 +24,38 @@ def add_parser(sub, period_args):
     s.add_argument("file", help="내보낸 파일(CSV 또는 JSON)")
     period_args(s)
     s.add_argument("--category", help="내보낼 때 준 분류")
-    return grp
 
+    s = grp.add_parser("backup", help="모임 자료 전체 백업")
+    s.add_argument("file", help="백업 파일 경로")
+
+    s = grp.add_parser(
+        "restore",
+        help="백업 파일로 모임 전체 자료 복원 (현재 자료 덮어쓰기)",
+    )
+    s.add_argument("file", help="복원할 백업 파일 경로")
+
+    s = grp.add_parser("total", help="파일의 지출 건수와 합계 확인")
+    s.add_argument("file", help="확인할 CSV 또는 JSON 파일")
+
+    s = grp.add_parser("roundtrip", help="내보낸 CSV와 원본 기록 비교 (CSV 전용)")
+    s.add_argument("file", help="비교할 CSV 파일")
+    period_args(s)
+    s.add_argument("--category", help="이 분류만 비교(분류 없음은 미분류)")
+
+    return grp
 
 
 def _range(args):
     """기간을 주지 않으면 전체(None, None). 주면 'YYYY-MM-DD' 문자열 두 개."""
     if not (args.month or args.start or args.end):
         return None, None
-    start, end = _period(args)
-    return dates.fmt(start), dates.fmt(end)
 
+    start, end = _period(args)
+
+    if start > end:
+        raise ValueError("시작일이 끝일보다 늦습니다")
+
+    return dates.fmt(start), dates.fmt(end)
 
 
 def run(c, args, cfg, store, out):
@@ -45,12 +66,40 @@ def run(c, args, cfg, store, out):
         out(f"내보냈습니다: {args.file} ({count}건, 합계 {money.fmt(total)}원)")
         return False
 
-
     if c == "verify":
         start, end = _range(args)
-        same, file_sum, record_sum = feat.verify_export(store, args.file, start, end, args.category)
+        same, file_sum, record_sum = feat.verify_export(
+            store, args.file, start, end, args.category
+        )
         result = "같습니다" if same else "다릅니다"
         out(f"파일 합계 {money.fmt(file_sum)}원, 기록 합계 {money.fmt(record_sum)}원 → {result}")
+        return False
+
+    if c == "backup":
+        feat.backup_all(store, args.file)
+        out(f"백업했습니다: {args.file}")
+        return False
+
+    if c == "restore":
+        feat.restore_all(store, args.file)
+        out(f"복원했습니다: {args.file}")
+        out("주의: 백업 파일의 모임 전체 자료로 현재 자료를 교체했습니다.")
+        return True
+
+    if c == "total":
+        count, total = feat.file_total(args.file)
+        out(f"파일: {args.file} ({count}건, 합계 {money.fmt(total)}원)")
+        return False
+
+    if c == "roundtrip":
+        start, end = _range(args)
+        different = feat.roundtrip_check(
+            store, args.file, start, end, args.category
+        )
+        if different:
+            out(f"원본 기록과 다른 지출 번호: {', '.join(map(str, different))}")
+        else:
+            out("원본 기록과 파일이 일치합니다.")
         return False
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
