@@ -188,6 +188,9 @@ class MergeTests(StoreCase):
         self.assertEqual(report["duplicates"][0]["id"], 456)
 
 
-if __name__ == "__main__":
-    import unittest
-    unittest.main()
+
+    def test_merge_skips_member_with_invalid_dates(self):
+        backup = self.create_backup({"members": [{"name": "오류회원", "joined": "2026-11-10", "left": "2026-11-01"}], "expenses": []})
+        before = len(self.store.data["members"])
+        merge(self.store, backup)
+        self.assertEqual(len(self.store.data["members"]), before)
