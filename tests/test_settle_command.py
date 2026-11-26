@@ -78,6 +78,12 @@ class Balance(SettleCommandCase):
         self.assertEqual(code, 1)
         self.assertTrue(text.startswith("오류: 기간을 지정하십시오"))
 
+    def test_rejects_reversed_period(self):
+        # report period·io 와 같이 시작일이 끝일보다 늦으면 빈 결과 대신 오류
+        self.put(1, "2026-11-12", LEE, 10000)
+        code, text = self.settle("balance", "--start", "2026-11-30", "--end", "2026-11-01")
+        self.assertEqual((code, text), (1, "오류: 시작일이 끝일보다 늦습니다: 2026-11-30 ~ 2026-11-01"))
+
     def test_does_not_change_data_file(self):
         self.put(1, "2026-11-12", LEE, 10000)
         self.store.save()
@@ -118,6 +124,11 @@ class Lock(SettleCommandCase):
         code, text = self.settle("lock")
         self.assertEqual(code, 1)
         self.assertTrue(text.startswith("오류: 기간을 지정하십시오"))
+
+    def test_rejects_reversed_period_without_saving(self):
+        code, text = self.settle("lock", "--start", "2026-11-30", "--end", "2026-11-01")
+        self.assertEqual((code, text), (1, "오류: 시작일이 끝일보다 늦습니다: 2026-11-30 ~ 2026-11-01"))
+        self.assertEqual(self.saved()["locks"], [])
 
 
 class Locks(SettleCommandCase):
