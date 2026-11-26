@@ -127,5 +127,14 @@ class RunRecurring(StoreCase):
         self.assertEqual(self.store.data["recurring"][0]["last_month"], "2026-12")
 
 
+class RunRecurringReport(StoreCase):
+    def test_returns_created_and_skipped(self):
+        settle.add_recurring(self.store, 10, KIM, 9000, NAMES, "", "2026-11")
+        self.store.data["locks"].append({"start": "2026-11-01", "end": "2026-11-30"})
+        created, skipped = settle.run_recurring_report(self.store, "2026-12-31")
+        self.assertEqual([e["date"] for e in created], ["2026-12-10"])
+        self.assertEqual(skipped, [(1, "2026-11-10", "정산이 확정된 날짜입니다: 2026-11-10")])
+
+
 if __name__ == "__main__":
     unittest.main()
