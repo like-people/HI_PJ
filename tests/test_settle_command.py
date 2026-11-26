@@ -164,6 +164,50 @@ class Transfer(SettleCommandCase):
                 self.assertEqual(self.data_text(), before)
 
 
+class Compare(SettleCommandCase):
+    def setUp(self):
+        super().setUp()
+        # 10월: 이 9,000 셋 → 김 -3,000 · 이 6,000 · 박 -3,000 / 11월: 김 12,000 김·이 → 김 6,000 · 이 -6,000
+        self.put(1, "2026-10-10", LEE, 9000)
+        self.put(2, "2026-11-12", KIM, 12000, [KIM, LEE])
+
+    def test_table_order_and_diff(self):
+        # 규격 4-4 4번: 지금 정산(명부 순서) 다음 이전에만 있는 사람, 없는 쪽은 0, 차이 = 지금 - 이전, 차이 합 0
+        code, text = self.settle("compare", "--month", "2026-11", "--prev-month", "2026-10")
+        self.assertEqual(code, 0)
+        lines = text.splitlines()
+        self.assertEqual(lines[0], "이전: 2026-10-01 ~ 2026-10-31 / 지금: 2026-11-01 ~ 2026-11-30")
+        self.assertEqual(lines[1].split(), ["이름", "이전", "잔액", "지금", "잔액", "차이"])
+        self.assertEqual([line.split() for line in lines[3:6]],
+                         [[KIM, "-3,000", "6,000", "9,000"],
+                          [LEE, "6,000", "-6,000", "-12,000"],
+                          [PARK, "-3,000", "0", "3,000"]])
+        self.assertEqual(lines[-1].split(), ["합계", "0", "0", "0"])
+
+    def test_periods_by_start_and_end(self):
+        by_month = self.settle("compare", "--month", "2026-11", "--prev-month", "2026-10")
+        by_dates = self.settle("compare", "--start", "2026-11-01", "--end", "2026-11-30",
+                               "--prev-start", "2026-10-01", "--prev-end", "2026-10-31")
+        self.assertEqual(by_dates, by_month)
+
+    def test_nothing_to_compare(self):
+        self.assertEqual(self.settle("compare", "--month", "2026-12", "--prev-month", "2026-09"),
+                         (0, "이전: 2026-09-01 ~ 2026-09-30 / 지금: 2026-12-01 ~ 2026-12-31\n비교할 정산이 없습니다"))
+
+    def test_requires_both_periods(self):
+        code, text = self.settle("compare", "--month", "2026-11")
+        self.assertEqual((code, text), (1, "오류: 이전 기간을 지정하십시오(--prev-month YYYY-MM 또는 --prev-start, --prev-end)"))
+        code, text = self.settle("compare", "--prev-month", "2026-10")
+        self.assertEqual(code, 1)
+        self.assertTrue(text.startswith("오류: 기간을 지정하십시오"))
+
+    def test_does_not_change_data_file(self):
+        self.store.save()
+        before = self.data_text()
+        self.settle("compare", "--month", "2026-11", "--prev-month", "2026-10")
+        self.assertEqual(self.data_text(), before)
+
+
 class Unknown(SettleCommandCase):
     def test_unknown_subcommand(self):
         code, text = self.settle()
