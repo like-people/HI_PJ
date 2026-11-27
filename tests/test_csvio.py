@@ -71,9 +71,9 @@ class TestReadCsvRows(unittest.TestCase):
             )
     def test_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
-           path = Path(tmp) / "missing.csv"
-           with self.assertRaises(ValueError):
-               detect_encoding(path)
+            path = Path(tmp) / "missing.csv"
+            with self.assertRaises(ValueError):
+                detect_encoding(path)
     
     def test_actual_line_number_with_multiline_cell(self):
         with tempfile.TemporaryDirectory() as tmp:
