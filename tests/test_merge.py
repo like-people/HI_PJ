@@ -91,6 +91,49 @@ class MergeTests(StoreCase):
             before,
         )
 
+    def test_merge_normalizes_member_dates(self):
+        backup = self.create_backup({
+            "members": [
+                {
+                    "name": "날짜회원",
+                    "joined": "2026-1-5",
+                    "left": "2026-2-9",
+                },
+            ],
+            "expenses": [],
+        })
+
+        merge(self.store, backup)
+
+        member = next(
+            m for m in self.store.data["members"]
+            if m["name"] == "날짜회원"
+        )
+
+        self.assertEqual(member["joined"], "2026-01-05")
+        self.assertEqual(member["left"], "2026-02-09")
+
+    def test_merge_sets_missing_left_to_none(self):
+        backup = self.create_backup({
+            "members": [
+                {
+                    "name": "탈퇴일없는회원",
+                    "joined": "2026-1-5",
+                },
+            ],
+            "expenses": [],
+        })
+
+        merge(self.store, backup)
+
+        member = next(
+            m for m in self.store.data["members"]
+            if m["name"] == "탈퇴일없는회원"
+        )
+
+        self.assertIn("left", member)
+        self.assertIsNone(member["left"])
+
     def test_merge_skips_member_with_non_string_name(self):
         backup = self.create_backup({
             "members": [
