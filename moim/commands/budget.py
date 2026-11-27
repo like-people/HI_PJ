@@ -32,6 +32,10 @@ def add_parser(sub, period_args):
     s = grp.add_parser("unpaid", help="월별 회비 미납자")
     s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
 
+    s = grp.add_parser("import-bank", help="은행 거래내역 CSV 가져오기")
+    s.add_argument("path", help="은행 거래내역 CSV 파일 경로")
+    s.add_argument("--treasurer", help="출금 기록 총무 이름 (기본: 설정의 treasurer)")
+
     return grp
 
 
@@ -117,5 +121,16 @@ def run(c, args, cfg, store, out):
         out(textfmt.table(["이름", "낸 회비", "부족액"], rows, numeric={1, 2}))
         return False
 
-    out("사용법: moim budget status|category|pay|balance|unpaid")
+    if c == "import-bank":
+        treasurer = args.treasurer or cfg.get("treasurer")
+        res = feat.import_bank(store, args.path, treasurer)
+        out(f"지출 {len(res['expenses'])}건, 회비 입금 {res['payments']}건을 가져왔습니다")
+        if res["duplicates"]:
+            lines = ", ".join(str(line) for line in res["duplicates"])
+            out(f"중복으로 건너뛴 줄: {lines}")
+        for line, reason in res["errors"]:
+            out(f"오류 {line}줄: {reason}")
+        return bool(res["expenses"] or res["payments"])
+
+    out("사용법: moim budget status|category|pay|balance|unpaid|import-bank")
     return False
