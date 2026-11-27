@@ -69,8 +69,8 @@ class TestReadCsvRows(unittest.TestCase):
                     (3, {"이름": "영희", "금액": "", "비고": ""}),
                 ],
             )
-   def test_missing_file(self):
-       with tempfile.TemporaryDirectory() as tmp:
+    def test_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
            path = Path(tmp) / "missing.csv"
            with self.assertRaises(ValueError):
                detect_encoding(path)
