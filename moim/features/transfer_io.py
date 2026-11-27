@@ -349,11 +349,9 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
             if is_duplicate:
                 duplicates.append(line_number)
                 continue
-            # 중복이 아닌 정상 행만 기록
-            seen.add(signature)
-
             # 미리보기는 실제 자료를 변경하지 않는다.
             if preview:
+                seen.add(signature)
                 added.append(line_number)
                 continue
 
@@ -369,6 +367,8 @@ def import_csv(store, path, mapping=None, encoding=None, preview=False):
                 category=category,
             )
 
+            # 등록에 성공한 항목만 이번 CSV의 처리 기록에 추가한다.
+            seen.add(signature)
             added.append(expense["id"])
 
         except (ValueError, TypeError, KeyError) as exc:
