@@ -22,6 +22,91 @@ class TransferIOCommandTests(unittest.TestCase):
     def parse(self, *args):
         return self.parser.parse_args(["io", *args])
 
+    def test_import_parser_accepts_file_and_preview(self):
+        args = self.parse("import", "expenses.csv")
+        self.assertEqual(args.file, "expenses.csv")
+        self.assertFalse(args.preview)
+
+        preview_args = self.parse(
+            "import", "expenses.csv", "--preview"
+        )
+        self.assertTrue(preview_args.preview)
+
+    def test_import_calls_import_csv_and_returns_true_when_added(self):
+        args = self.parse("import", "expenses.csv")
+        store = object()
+        output = []
+
+        result = {
+            "encoding": "utf-8-sig",
+            "added": [1],
+            "duplicates": [3],
+            "errors": [(4, "금액 오류")],
+        }
+
+        with patch(
+            "moim.commands.transfer_io.feat.import_csv",
+            return_value=result,
+        ) as import_csv:
+            changed = run(args.cmd, args, None, store, output.append)
+
+        import_csv.assert_called_once_with(
+            store, "expenses.csv", preview=False
+        )
+        self.assertTrue(changed)
+        self.assertIn("추가 1건", output[0])
+        self.assertIn("중복 1건", output[0])
+        self.assertIn("오류 1줄", output[0])
+        self.assertIn("중복 의심 줄: 3", output)
+        self.assertIn("4번째 줄: 금액 오류", output)
+
+    def test_import_preview_does_not_return_true(self):
+        args = self.parse("import", "expenses.csv", "--preview")
+        store = object()
+        output = []
+
+        result = {
+            "encoding": "utf-8-sig",
+            "added": [1],
+            "duplicates": [],
+            "errors": [],
+        }
+
+        with patch(
+            "moim.commands.transfer_io.feat.import_csv",
+            return_value=result,
+        ) as import_csv:
+            changed = run(args.cmd, args, None, store, output.append)
+
+        import_csv.assert_called_once_with(
+            store, "expenses.csv", preview=True
+        )
+        self.assertFalse(changed)
+        self.assertIn("미리보기", output[0])
+        self.assertIn(
+            "미리보기이므로 실제 자료는 변경하지 않았습니다.",
+            output,
+        )
+
+    def test_import_returns_false_when_nothing_added(self):
+        args = self.parse("import", "expenses.csv")
+        output = []
+
+        result = {
+            "encoding": "cp949",
+            "added": [],
+            "duplicates": [2],
+            "errors": [(3, "날짜 오류")],
+        }
+
+        with patch(
+            "moim.commands.transfer_io.feat.import_csv",
+            return_value=result,
+        ):
+            changed = run(args.cmd, args, None, object(), output.append)
+
+        self.assertFalse(changed)
+
     def test_backup_calls_backup_all(self):
         args = self.parse("backup", "backup.json")
         store = object()
