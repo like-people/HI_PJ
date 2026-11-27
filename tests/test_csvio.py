@@ -34,7 +34,7 @@ class TestDetectEncoding(unittest.TestCase):
     def test_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "missing.csv"
-            with self.assertRaises(ValueError):
+            with self.assertRaises(FileNotFoundError):
                 detect_encoding(path)
 
 
