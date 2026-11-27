@@ -296,7 +296,7 @@ def restore_all(store, path):
 
 
 def merge(store, other_path, report=None):
-    """다른 모임 자료의 회원·지출을 합친다. 지출 번호는 새로 매긴다."""
+    """다른 모임 자료(백업 파일)의 회원·지출을 합친다. 지출 번호는 새로 매긴다. 돌려주는 값: 합친 지출 수"""
     with open(other_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -313,14 +313,14 @@ def merge(store, other_path, report=None):
     for member in data["members"]:
         name = member.get("name") if isinstance(member, dict) else None
         try:
-            if not name or not member.get("joined"):
+            if not isinstance(name, str) or not name.strip() or not member.get("joined"):
                 raise ValueError("회원의 필수 항목이 없습니다: name, joined")
             joined = dates.parse(member["joined"])
             left = dates.parse(member["left"]) if member.get("left") else None
             if left and left < joined:
                 raise ValueError("탈퇴일이 가입일보다 빠릅니다")
         except (ValueError, TypeError) as exc:
-            skipped.append({"id": name, "reason": str(exc)})
+            skipped.append({"kind": "member", "id": name, "reason": str(exc)})
             continue
         if name not in existing_names:
             store.data["members"].append(copy.deepcopy(member))
@@ -333,9 +333,10 @@ def merge(store, other_path, report=None):
         missing = [key for key in ("date", "payer", "amount", "members") if key not in expense]
         if missing:
             skipped.append({
+                "kind": "expense",
                 "id": original_id,
                 "reason": f"필수 항목이 없습니다: {', '.join(missing)}",
-            })
+})
             continue
         try:
             duplicate_ids = ledger.duplicates(store, expense["date"], expense["payer"], expense["amount"])
@@ -349,7 +350,7 @@ def merge(store, other_path, report=None):
             if duplicate_ids:
                 duplicates.append({"id": original_id, "matches": duplicate_ids})
         except (ValueError, KeyError, TypeError) as exc:
-            skipped.append({"id": original_id, "reason": str(exc)})
+            skipped.append({"kind": "expense", "id": original_id, "reason": str(exc)})
 
     if report is not None:
         report["skipped"] = skipped

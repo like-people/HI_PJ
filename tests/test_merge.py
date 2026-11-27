@@ -91,6 +91,23 @@ class MergeTests(StoreCase):
             before,
         )
 
+    def test_merge_skips_member_with_non_string_name(self):
+        backup = self.create_backup({
+            "members": [
+                {"name": 5, "joined": "2026-09-01", "left": None},
+            ],
+            "expenses": [],
+        })
+        before = len(self.store.data["members"])
+        report = {}
+
+        merge(self.store, backup, report=report)
+
+        self.assertEqual(len(self.store.data["members"]), before)
+        self.assertEqual(len(report["skipped"]), 1)
+        self.assertEqual(report["skipped"][0]["kind"], "member")
+        self.assertEqual(report["skipped"][0]["id"], 5)
+
     def test_merge_skips_deleted_expenses(self):
         backup = self.create_backup({
             "members": [],
@@ -151,6 +168,7 @@ class MergeTests(StoreCase):
         self.assertEqual(len(report["skipped"]), 1)
         self.assertEqual(report["skipped"][0]["id"], 123)
         self.assertTrue(report["skipped"][0]["reason"])
+        self.assertEqual(report["skipped"][0]["kind"], "expense")
 
     def test_merge_reports_duplicate_expenses(self):
         # 먼저 기존 지출을 정상적으로 생성한다.
@@ -204,6 +222,9 @@ class MergeTests(StoreCase):
         self.assertEqual(len(self.store.data["members"]), before)
         self.assertEqual(len(report["skipped"]), 3)
         self.assertTrue(all(item["reason"] for item in report["skipped"]))
+        self.assertTrue(
+            all(item["kind"] == "member" for item in report["skipped"])
+        )
 
     def test_merge_reports_missing_expense_field(self):
         backup = self.create_backup({
@@ -216,3 +237,4 @@ class MergeTests(StoreCase):
 
         self.assertEqual(added, 0)
         self.assertEqual(report["skipped"][0]["reason"], "필수 항목이 없습니다: date")
+        self.assertEqual(report["skipped"][0]["kind"], "expense")
