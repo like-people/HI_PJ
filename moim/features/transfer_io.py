@@ -456,7 +456,11 @@ def merge(store, other_path, report=None):
             skipped.append({"kind": "member", "id": name, "reason": str(exc)})
             continue
         if name not in existing_names:
-            store.data["members"].append(copy.deepcopy(member))
+            store.data["members"].append({
+                "name": name,
+                "joined": dates.fmt(joined),
+                "left": dates.fmt(left) if left else None,
+            })
             existing_names.add(name)
 
     for expense in data["expenses"]:
