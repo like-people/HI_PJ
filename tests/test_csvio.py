@@ -30,7 +30,7 @@ class TestDetectEncoding(unittest.TestCase):
             path.write_bytes(b"\x81")
             with self.assertRaises(ValueError):
                 detect_encoding(path)
-                
+
     def test_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "missing.csv"
@@ -75,7 +75,7 @@ class TestReadCsvRows(unittest.TestCase):
                     (3, {"이름": "영희", "금액": "", "비고": ""}),
                 ],
             )
-    
+
     def test_actual_line_number_with_multiline_cell(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "data.csv"
