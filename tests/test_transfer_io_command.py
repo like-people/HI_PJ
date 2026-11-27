@@ -1,6 +1,7 @@
 import argparse
 from unittest.mock import patch
 import unittest
+from types import SimpleNamespace
 from helpers import StoreCase, NAMES
 from moim.commands.transfer_io import add_parser, run
 from moim.features.transfer_io import export_csv, roundtrip_check
@@ -136,6 +137,86 @@ class TransferIOCommandTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "시작일이 끝일보다 늦습니다"):
             run(args.cmd, args, None, None, lambda message: None)
+
+    def test_merge_parser_accepts_backup_file(self):
+        args = self.parse("merge", "other_backup.json")
+
+        self.assertEqual(args.cmd, "merge")
+        self.assertEqual(args.file, "other_backup.json")
+
+    def test_merge_reports_result_and_returns_true(self):
+        args = self.parse("merge", "other_backup.json")
+        store = SimpleNamespace(
+            data={
+                "members": [{"name": "기존회원"}],
+                "expenses": [],
+            }
+        )
+        output = []
+
+        def fake_merge(target, path, report):
+            target.data["members"].append({"name": "새회원"})
+            target.data["expenses"].append({"id": 1})
+
+            report["skipped"] = [
+                {
+                    "kind": "member",
+                    "id": "잘못된회원",
+                    "reason": "가입일이 없습니다",
+                },
+                {
+                    "kind": "expense",
+                    "id": 77,
+                    "reason": "활동 회원이 아닙니다",
+                },
+            ]
+            report["duplicates"] = [
+                {"id": 88, "matches": [1]},
+            ]
+            return 1
+
+        with patch(
+            "moim.commands.transfer_io.feat.merge",
+            side_effect=fake_merge,
+        ) as merge:
+            changed = run(args.cmd, args, None, store, output.append)
+
+        merge.assert_called_once()
+        self.assertEqual(merge.call_args.args[0], store)
+        self.assertEqual(merge.call_args.args[1], "other_backup.json")
+        self.assertIn("report", merge.call_args.kwargs)
+
+        self.assertTrue(changed)
+        self.assertTrue(any("회원 1명, 지출 1건 추가" in line for line in output))
+        self.assertTrue(any("잘못된회원" in line for line in output))
+        self.assertTrue(any("원본 지출 77번" in line for line in output))
+        self.assertTrue(any("중복 의심 지출 1건" in line for line in output))
+        self.assertTrue(any("88" in line for line in output))
+
+    def test_merge_returns_true_when_only_members_are_added(self):
+        args = self.parse("merge", "other_backup.json")
+        store = SimpleNamespace(
+            data={
+                "members": [{"name": "기존회원"}],
+                "expenses": [],
+            }
+        )
+        output = []
+
+        def fake_merge(target, path, report):
+            target.data["members"].append({"name": "새회원"})
+            report["skipped"] = []
+            report["duplicates"] = []
+            return 0
+
+        with patch(
+            "moim.commands.transfer_io.feat.merge",
+            side_effect=fake_merge,
+        ):
+            changed = run(args.cmd, args, None, store, output.append)
+
+        self.assertTrue(changed)
+        self.assertTrue(any("회원 1명, 지출 0건 추가" in line for line in output))
 
 
 class RoundtripIntegrationTests(StoreCase):
