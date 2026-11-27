@@ -289,12 +289,12 @@ def suggest_budget(store, month):
     year, mon = dates.parse_month(month)
     total_index = year * 12 + (mon - 1)
     start_index = total_index - 2
-    start_ym = f"{start_index // 12:04d}-{start_index % 12 + 1:02d}"
-    end_ym = f"{year:04d}-{mon:02d}"
+    start_ym = (start_index // 12, start_index % 12 + 1)
+    end_ym = (year, mon)
     months = dates.months_between(start_ym, end_ym)
 
-    first_start, _ = dates.month_range(*dates.parse_month(months[0]))
-    _, last_end = dates.month_range(*dates.parse_month(months[-1]))
+    first_start, _ = dates.month_range(*start_ym)
+    _, last_end = dates.month_range(*end_ym)
     total = period_total(store, first_start, last_end)
 
     unit = 1000 * len(months)
