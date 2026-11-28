@@ -33,9 +33,17 @@ def add_parser(sub, period_args):
     return grp
 
 
+def _settle_period(args):
+    """_period 와 같고, 시작일이 끝일보다 늦으면 오류(lock_period·report period·io 와 같이 거부)."""
+    start, end = _period(args)
+    if start > end:
+        raise ValueError(f"시작일이 끝일보다 늦습니다: {start} ~ {end}")
+    return start, end
+
+
 def run(c, args, cfg, store, out):
     if c == "balance":
-        start, end = _period(args)
+        start, end = _settle_period(args)
         rows = feat.balances(store, start, end)
         if not rows:
             out("정산할 지출이 없습니다")
@@ -50,7 +58,7 @@ def run(c, args, cfg, store, out):
         return False
 
     if c == "lock":
-        start, end = _period(args)
+        start, end = _settle_period(args)
         before = len(store.data["locks"])
         lock = feat.lock_period(store, start, end)
         if len(store.data["locks"]) == before:
