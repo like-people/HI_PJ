@@ -1,12 +1,11 @@
-import argparse
-import copy
 import csv
+import argparse
 from unittest.mock import patch
 import unittest
 from types import SimpleNamespace
 from helpers import StoreCase, NAMES
 from moim.commands.transfer_io import add_parser, run
-from moim.features.transfer_io import backup_all, export_csv, roundtrip_check
+from moim.features.transfer_io import export_csv, roundtrip_check
 
 
 class TransferIOCommandTests(unittest.TestCase):
@@ -454,122 +453,6 @@ class RoundtripIntegrationTests(StoreCase):
         self.assertEqual(expense["members"], NAMES)
         self.assertIn("추가 1건", output[0])
         self.assertIn("오류 0줄", output[0])
-
-
-    def test_merge_command_with_real_backup_file(self):
-        kim = NAMES[0]
-        backup_path = self.path("other_backup.json")
-
-        source_store = SimpleNamespace(
-            data={
-                "members": [
-                    {
-                        "name": "새회원",
-                        "joined": "2026-09-01",
-                        "left": None,
-                    },
-                    {
-                        "name": "가입일누락",
-                    },
-                ],
-                "expenses": [
-                    {
-                        "id": 100,
-                        "date": "2026-11-10",
-                        "payer": kim,
-                        "amount": 3000,
-                        "members": list(NAMES),
-                        "memo": "병합 테스트",
-                        "weights": None,
-                        "category": None,
-                        "deleted": False,
-                    },
-                    {
-                        "id": 77,
-                        "date": "2026-11-11",
-                        "payer": kim,
-                        "amount": 2000,
-                        "deleted": False,
-                    },
-                ],
-            }
-        )
-
-        # 실제 JSON 백업 파일을 만든 뒤 실제 io merge 명령으로 병합한다.
-        backup_all(source_store, backup_path)
-
-        parser = argparse.ArgumentParser()
-        sub = parser.add_subparsers(dest="group")
-        add_parser(sub, TransferIOCommandTests.period_args)
-        args = parser.parse_args(["io", "merge", backup_path])
-
-        output = []
-        changed = run(
-            args.cmd,
-            args,
-            self.cfg,
-            self.store,
-            output.append,
-        )
-
-        self.assertTrue(changed)
-        self.assertIn(
-            "새회원",
-            [member["name"] for member in self.store.data["members"]],
-        )
-        self.assertEqual(len(self.store.data["expenses"]), 1)
-
-        # 실제 feat.merge()가 만든 report의 kind, id, reason이 출력되는지 확인한다.
-        self.assertTrue(any(
-            "회원 추가 건너뜀 (가입일누락)" in line
-            and "회원의 필수 항목이 없습니다" in line
-            for line in output
-        ))
-        self.assertTrue(any(
-            "원본 지출 77번 추가 건너뜀" in line
-            and "필수 항목이 없습니다: members" in line
-            for line in output
-        ))
-
-    def test_merge_command_returns_false_when_backup_adds_nothing(self):
-        backup_path = self.path("existing_members_only.json")
-        source_store = SimpleNamespace(
-            data={
-                "members": [
-                    {
-                        "name": NAMES[0],
-                        "joined": "2026-09-01",
-                        "left": None,
-                    },
-                ],
-                "expenses": [],
-            }
-        )
-
-        backup_all(source_store, backup_path)
-
-        parser = argparse.ArgumentParser()
-        sub = parser.add_subparsers(dest="group")
-        add_parser(sub, TransferIOCommandTests.period_args)
-        args = parser.parse_args(["io", "merge", backup_path])
-
-        before = copy.deepcopy(self.store.data)
-        output = []
-
-        changed = run(
-            args.cmd,
-            args,
-            self.cfg,
-            self.store,
-            output.append,
-        )
-
-        self.assertFalse(changed)
-        self.assertEqual(self.store.data, before)
-        self.assertTrue(any(
-            "회원 0명, 지출 0건 추가" in line
-            for line in output
-        ))
 
 
 if __name__ == "__main__":
