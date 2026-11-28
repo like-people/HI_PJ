@@ -12,15 +12,21 @@ def detect_encoding(path):
         return "utf-8-sig"
     except FileNotFoundError:
         raise
-    except (UnicodeDecodeError, OSError):
+    except UnicodeDecodeError:
         try:
             with open(path, "r", encoding="cp949") as f:
                 f.read()
             return "cp949"
         except FileNotFoundError:
             raise
-        except (UnicodeDecodeError, OSError) as e:
-            raise ValueError("UTF-8 또는 CP949로 읽을 수 없는 파일입니다.") from e
+        except UnicodeDecodeError as e:
+            raise ValueError(
+                "UTF-8 또는 CP949로 읽을 수 없는 파일입니다."
+            ) from e
+        except OSError as e:
+            raise ValueError(f"파일을 읽을 수 없습니다: {path}") from e
+    except OSError as e:
+        raise ValueError(f"파일을 읽을 수 없습니다: {path}") from e
 
 
 # 담당: 기능 6(류강현)
