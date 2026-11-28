@@ -281,3 +281,13 @@ class MergeTests(StoreCase):
         self.assertEqual(added, 0)
         self.assertEqual(report["skipped"][0]["reason"], "필수 항목이 없습니다: date")
         self.assertEqual(report["skipped"][0]["kind"], "expense")
+
+    def test_merge_rejects_non_json_file_with_clear_message(self):
+        path = Path(self.path("members.txt"))
+        path.write_text("members.txt", encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^JSON 백업 파일이 아닙니다$",
+        ):
+            merge(self.store, path)

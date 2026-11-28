@@ -430,8 +430,11 @@ def restore_all(store, path):
 
 def merge(store, other_path, report=None):
     """다른 모임 자료(백업 파일)의 회원·지출을 합친다. 지출 번호는 새로 매긴다. 돌려주는 값: 합친 지출 수"""
-    with open(other_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(other_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError("JSON 백업 파일이 아닙니다") from exc
 
     if not isinstance(data, dict):
         raise ValueError("병합 파일 형식이 올바르지 않습니다")
