@@ -164,6 +164,84 @@ class Transfer(SettleCommandCase):
                 self.assertEqual(self.data_text(), before)
 
 
+class Recurring(SettleCommandCase):
+    def rec(self, day=31, start="2026-11", rid=1, last=None):
+        self.store.data["recurring"].append(
+            {"id": rid, "day": day, "payer": KIM, "amount": 50000, "members": list(NAMES), "weights": None,
+             "memo": "정기 대관료", "start_month": start, "last_month": last})
+
+    def saved(self):
+        with open(self.path("data.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_add_saves(self):
+        code, text = self.settle("add-recurring", "--day", "31", "--payer", KIM, "--amount", "50,000",
+                                 "--members", ";".join(NAMES), "--memo", "정기 대관료", "--start-month", "2026-11")
+        self.assertEqual((code, text), (0, f"반복 지출을 등록했습니다: 1번 매월 31일 {KIM} 50,000원 (2026-11부터)"))
+        self.assertEqual(self.saved()["recurring"][0]["members"], NAMES)
+
+    def test_add_rejects_bad_input_without_saving(self):
+        self.store.save()
+        before = self.data_text()
+        for args in (["--day", "32", "--payer", KIM], ["--day", "5", "--payer", "명부에없음"]):
+            with self.subTest(args=args):
+                code, text = self.settle("add-recurring", *args, "--amount", "1000", "--members", KIM,
+                                         "--start-month", "2026-11")
+                self.assertEqual(code, 1)
+                self.assertTrue(text.startswith("오류: "))
+                self.assertEqual(self.data_text(), before)
+
+    def test_run_uses_last_day_of_short_months(self):
+        # 31일 반복 → 11-30, 12-31, 01-31, 02-28 (공고문: 그달에 없는 날은 말일로)
+        self.rec()
+        code, text = self.settle("run-recurring", "--until", "2027-02-28")
+        self.assertEqual(code, 0)
+        self.assertEqual(text.splitlines(), [f"지출을 만들었습니다: {i}번 {d} {KIM} 50,000원 정기 대관료" for i, d in
+                                             enumerate(["2026-11-30", "2026-12-31", "2027-01-31", "2027-02-28"], 1)])
+        data = self.saved()
+        self.assertEqual([e["recurring_id"] for e in data["expenses"]], [1, 1, 1, 1])
+        self.assertEqual(data["recurring"][0]["last_month"], "2027-02")
+
+    def test_run_again_makes_nothing_and_does_not_save(self):
+        self.rec(last="2027-02")
+        self.store.save()
+        output = []
+        with patch.object(Store, "save", side_effect=AssertionError("만든 것이 없는데 저장함")):
+            code = main(["--config", self.config, "settle", "run-recurring", "--until", "2027-02-28"], output.append)
+        self.assertEqual((code, output), (0, ["2027-02-28까지 새로 만들 반복 지출이 없습니다"]))
+
+    def test_run_skips_locked_month_and_reports(self):
+        # 규격 4-4 7번: 확정된 달은 건너뛰고 알리며, last_month 는 넘긴다
+        self.rec()
+        self.store.data["locks"].append({"start": "2026-12-01", "end": "2026-12-31"})
+        code, text = self.settle("run-recurring", "--until", "2027-01-31")
+        lines = text.splitlines()
+        self.assertEqual(len(lines), 3)
+        self.assertIn("2026-11-30", lines[0])
+        self.assertIn("2027-01-31", lines[1])
+        self.assertEqual(lines[2], "건너뜀: 반복 1번 2026-12-31 (정산이 확정된 날짜입니다: 2026-12-31)")
+        data = self.saved()
+        self.assertEqual([e["date"] for e in data["expenses"]], ["2026-11-30", "2027-01-31"])
+        self.assertEqual(data["recurring"][0]["last_month"], "2027-01")
+
+    def test_run_waits_until_the_day(self):
+        # 11-15 까지면 11-30 은 아직 만들지 않는다
+        self.rec()
+        self.assertEqual(self.settle("run-recurring", "--until", "2026-11-15"),
+                         (0, "2026-11-15까지 새로 만들 반복 지출이 없습니다"))
+        self.assertIsNone(self.saved()["recurring"][0]["last_month"])
+
+    def test_list(self):
+        self.assertEqual(self.settle("recurring"), (0, "등록한 반복 지출이 없습니다"))
+        self.rec(last="2026-12")
+        code, text = self.settle("recurring")
+        lines = text.splitlines()
+        self.assertEqual(lines[0].split(), ["번호", "매월", "낸", "사람", "금액", "참여자", "메모", "시작", "달",
+                                            "마지막으로", "만든", "달"])
+        self.assertEqual(lines[2].split(), ["1", "31일", KIM, "50,000", ";".join(NAMES), "정기", "대관료",
+                                            "2026-11", "2026-12"])
+
+
 class Unknown(SettleCommandCase):
     def test_unknown_subcommand(self):
         code, text = self.settle()

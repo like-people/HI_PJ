@@ -192,9 +192,14 @@ def add_recurring(store, day, payer, amount, members, memo, start_month):
 
 def run_recurring(store, until):
     """until 날짜까지 아직 만들지 않은 반복 지출을 만든다. 달 말일보다 큰 날은 말일로. 돌려주는 값: 만든 지출 목록."""
+    return run_recurring_report(store, until)[0]
+
+
+def run_recurring_report(store, until):
+    """run_recurring 과 같고 건너뛴 달도 알려 준다(규격 4-4 7번). 돌려주는 값: (만든 지출 목록, [(반복 번호, 날짜, 이유)])"""
     end_day = dates.parse(until)
     end_ym = (end_day.year, end_day.month)
-    created = []
+    created, skipped = [], []
     for rec in store.data["recurring"]:
         # 규격 4-4 3번: 이미 만든 달은 last_month 로 판단한다.
         if rec.get("last_month"):
@@ -209,10 +214,11 @@ def run_recurring(store, until):
                 expense = ledger.insert(store, day, rec["payer"], rec["amount"], rec["members"],
                                         memo=rec.get("memo", ""), weights=rec.get("weights"),
                                         recurring_id=rec["id"])
-            except ValueError:
+            except ValueError as e:
                 # 확정된 달이거나 그날 회원이 아닌 사람이 있으면 그달은 만들지 않고 넘어간다(규격 4-4 7번).
                 expense = None
+                skipped.append((rec["id"], dates.fmt(day), str(e)))
             if expense is not None:
                 created.append(expense)
             rec["last_month"] = f"{year:04d}-{month:02d}"
-    return created
+    return created, skipped
