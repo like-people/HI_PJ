@@ -31,6 +31,20 @@ class TestDetectEncoding(unittest.TestCase):
             with self.assertRaises(ValueError):
                 detect_encoding(path)
 
+    def test_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "missing.csv"
+            with self.assertRaises(FileNotFoundError):
+                detect_encoding(path)
+
+    def test_directory_path_reports_read_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(
+                ValueError,
+                "파일을 읽을 수 없습니다",
+            ):
+                detect_encoding(tmp)
+
 
 class TestReadCsvRows(unittest.TestCase):
     def test_mapping_and_unmapped_columns(self):
