@@ -1,4 +1,4 @@
-"""통합 시나리오 테스트. 담당: 김영광.
+"""통합 시나리오 테스트. 담당: 팀 공동 작업 "통합 시나리오 테스트"(김영광).
 
 한 달(2026-11)치 자료로 입력 → 분류 → 보고서 → 정산 → 내보내기를 이어서 실행하고,
 같은 기간에서 다섯 합계가 모두 같은지 확인한다(규격 6-2 4번).
@@ -6,11 +6,13 @@
   = member_shares 합 = 내보낸 CSV 의 amount 합
 """
 
+import copy
 import unittest
 
 from helpers import NAMES, StoreCase
 
 from moim.common import queries
+from moim.common.store import Store
 from moim.features import budget, categorize, expenses, report, settle, transfer_io
 
 KIM, LEE, PARK = NAMES
@@ -162,6 +164,52 @@ class Scenario(StoreCase):
         expenses.add_expense(self.store, "2026-11-28", PARK, 3333, [KIM, PARK], memo="택시")
         expenses.delete_expense(self.store, self.cafe["id"])
         self.assert_all_equal(NOV_TOTAL + 3333 - 10001)
+
+    # 6. 다른 형식으로 내보내고 다시 가져와도 합계가 같다(기능 6)
+    def test_json_export_and_csv_roundtrip(self):
+        path = self.path("all.json")
+        self.assertEqual(transfer_io.export_json(self.store, path, START, END), (NOV_COUNT, NOV_TOTAL))
+        self.assertEqual(transfer_io.file_total(path), (NOV_COUNT, NOV_TOTAL))
+        # 내보낸 CSV 를 다시 읽어 원래 기록과 비교하면 다른 번호가 없다.
+        csv_path = self.path("round.csv")
+        transfer_io.export_csv(self.store, csv_path, START, END)
+        self.assertEqual(transfer_io.roundtrip_check(self.store, csv_path, START, END), [])
+
+    def test_import_exported_csv_into_new_store(self):
+        # 내보낸 CSV 를 같은 명부의 새 자료에 가져오면, 새 자료에서도 다섯 합계가 같다.
+        path = self.path("move.csv")
+        transfer_io.export_csv(self.store, path, START, END)
+        other = Store(self.path("other.json"), self.path("other_backup")).load()
+        other.data["members"] = copy.deepcopy(self.store.data["members"])
+        result = transfer_io.import_csv(other, path)
+        self.assertEqual((len(result["added"]), result["duplicates"], result["errors"]), (NOV_COUNT, [], []))
+        self.store = other
+        self.assert_all_equal(NOV_TOTAL)
+
+    # 7. 되살리기·되돌리기·참여자 빼기·이전 정산 비교도 합계 규칙을 지킨다(기능 1·4)
+    def test_restore_and_undo_follow_totals(self):
+        # 삭제한 11/20 택시 9,000원을 되살리면 다시 들어가고, 택시 수정(10,000 → 12,000)을 되돌리면 2,000원 준다.
+        expenses.restore_expense(self.store, self.dropped["id"])
+        self.assert_all_equal(NOV_TOTAL + 9000)
+        expenses.undo_last_edit(self.store, self.taxi["id"])
+        self.assert_all_equal(NOV_TOTAL + 9000 - 2000)
+
+    def test_exclude_member_moves_share_not_total(self):
+        # 택시 12,000원을 셋이 4,000원씩 나누다 박지훈을 빼면 김·이가 2,000원씩 더 부담한다.
+        before = queries.member_shares(self.store, START, END)
+        settle.exclude_member(self.store, self.taxi["id"], PARK)
+        after = queries.member_shares(self.store, START, END)
+        self.assertEqual({name: after[name] - before[name] for name in NAMES}, {KIM: 2000, LEE: 2000, PARK: -4000})
+        self.assertEqual(settle.balance_sum(settle.balances(self.store, START, END)), 0)
+        self.assert_all_equal(NOV_TOTAL)
+
+    def test_compare_with_previous_month(self):
+        # 10월 정산과 비교하면 이전·지금·차이의 합이 모두 0 이고, 지금 잔액은 balances 와 같다.
+        old = settle.balances(self.store, "2026-10-01", "2026-10-31")
+        new = settle.balances(self.store, START, END)
+        result = settle.compare(old, new)
+        self.assertEqual([sum(v[i] for v in result.values()) for i in range(3)], [0, 0, 0])
+        self.assertEqual({name: v[1] for name, v in result.items()}, {name: r["balance"] for name, r in new.items()})
 
 
 if __name__ == "__main__":
