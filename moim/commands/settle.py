@@ -20,6 +20,9 @@ def add_parser(sub, period_args):
     s = grp.add_parser("balance", help="사람마다 낸 돈·부담·송금·잔액과 잔액 합계")
     period_args(s)
 
+    s = grp.add_parser("transfers", help="송금 횟수를 줄인 '누가 누구에게 얼마' 목록(이미 보낸 송금은 뺀 나머지)")
+    period_args(s)
+
     s = grp.add_parser("lock", help="정산 확정(이 기간의 지출은 더 이상 추가·수정·삭제할 수 없음)")
     period_args(s)
 
@@ -47,6 +50,21 @@ def run(c, args, cfg, store, out):
         out(f"잔액 합계: {total:,}")
         if total != 0:
             out("경고: 잔액 합계가 0이 아닙니다. 자료를 확인하십시오")
+        return False
+
+    if c == "transfers":
+        start, end = _period(args)
+        rows = feat.balances(store, start, end)
+        # 잔액은 이미 기록한 송금을 반영하므로 목록은 아직 보내야 할 나머지다.
+        transfers = feat.minimal_transfers(rows)
+        # 출력 형식은 구현순서 문서 8절 "정산 결과와 송금 목록" 화면과 같다: 보낼 사람 -> 받을 사람 금액원
+        if not transfers:
+            out("보낼 송금이 없습니다")
+        for frm, to, amount in transfers:
+            out(f"{frm} -> {to} {amount:,}원")
+        total = feat.balance_sum(rows)
+        if total != 0:
+            out(f"경고: 잔액 합계가 0이 아닙니다({total:,}). 자료를 확인하십시오")
         return False
 
     if c == "lock":

@@ -86,6 +86,49 @@ class Balance(SettleCommandCase):
         self.assertEqual(self.data_text(), before)
 
 
+class Transfers(SettleCommandCase):
+    def test_list_in_roster_order_when_amounts_tie(self):
+        # 이서연이 9,000원을 내고 셋이 나눔 → 김·박이 3,000원씩 보냄. 금액이 같으면 명부 순서(규격 4-3)
+        self.put(1, "2026-11-12", LEE, 9000)
+        code, text = self.settle("transfers", "--month", "2026-11")
+        self.assertEqual(code, 0)
+        self.assertEqual(text.splitlines(), [f"{KIM} -> {LEE} 3,000원", f"{PARK} -> {LEE} 3,000원"])
+
+    def test_largest_sender_first(self):
+        # 김 12,000 · 이 3,000 을 셋이 나눔(각 5,000) → 잔액 김 7,000 · 이 -2,000 · 박 -5,000
+        self.put(1, "2026-11-10", KIM, 12000)
+        self.put(2, "2026-11-11", LEE, 3000)
+        code, text = self.settle("transfers", "--start", "2026-11-01", "--end", "2026-11-30")
+        self.assertEqual(code, 0)
+        self.assertEqual(text.splitlines(), [f"{PARK} -> {KIM} 5,000원", f"{LEE} -> {KIM} 2,000원"])
+
+    def test_recorded_transfer_is_subtracted(self):
+        self.put(1, "2026-11-12", LEE, 9000)
+        self.store.data["transfers"].append({"date": "2026-11-20", "from": PARK, "to": LEE, "amount": 3000})
+        self.assertEqual(self.settle("transfers", "--month", "2026-11"), (0, f"{KIM} -> {LEE} 3,000원"))
+
+    def test_nothing_to_send(self):
+        self.assertEqual(self.settle("transfers", "--month", "2026-11"), (0, "보낼 송금이 없습니다"))
+
+    def test_warns_when_total_is_not_zero(self):
+        self.put(1, "2026-11-12", "명부에없음", 9000)
+        code, text = self.settle("transfers", "--month", "2026-11")
+        self.assertEqual(code, 0)
+        self.assertEqual(text.splitlines()[-1], "경고: 잔액 합계가 0이 아닙니다(-9,000). 자료를 확인하십시오")
+
+    def test_requires_period(self):
+        code, text = self.settle("transfers")
+        self.assertEqual(code, 1)
+        self.assertTrue(text.startswith("오류: 기간을 지정하십시오"))
+
+    def test_does_not_change_data_file(self):
+        self.put(1, "2026-11-12", LEE, 9000)
+        self.store.save()
+        before = self.data_text()
+        self.settle("transfers", "--month", "2026-11")
+        self.assertEqual(self.data_text(), before)
+
+
 class Lock(SettleCommandCase):
     def saved(self):
         with open(self.path("data.json"), encoding="utf-8") as f:
