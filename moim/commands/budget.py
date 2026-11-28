@@ -20,6 +20,10 @@ def add_parser(sub, period_args):
     s = grp.add_parser("category", help="분류별 예산 상태")
     s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
 
+    s = grp.add_parser("forecast", help="월말 지출 예측")
+    s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
+    s.add_argument("--today", help="기준일 YYYY-MM-DD (기본: 오늘)")
+
     s = grp.add_parser("pay", help="회비 입금 기록")
     s.add_argument("member", help="회원 이름")
     s.add_argument("amount", help="입금액")
@@ -30,6 +34,9 @@ def add_parser(sub, period_args):
     s.add_argument("--until", help="기준일 YYYY-MM-DD")
 
     s = grp.add_parser("unpaid", help="월별 회비 미납자")
+    s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
+
+    s = grp.add_parser("table", help="예산 대비 실제 지출 표")
     s.add_argument("--month", help="YYYY-MM (기본: 이번 달)")
 
     return grp
@@ -87,6 +94,13 @@ def run(c, args, cfg, store, out):
         out(textfmt.table(["분류", "예산", "지출", "남은 금액", "상태"], rows, numeric={1, 2, 3}))
         return False
 
+    if c == "forecast":
+        month = _month_of(args)
+        today = args.today or dates.today()
+        projected = feat.forecast(store, month, today)
+        out(f"{month} 월말 예상 지출({dates.fmt(today)} 기준): {money.fmt(projected)}원")
+        return False
+
     if c == "pay":
         pay_date = args.date or dates.today()
         payment = feat.record_payment(store, pay_date, args.member, args.amount, memo=args.memo)
@@ -117,5 +131,14 @@ def run(c, args, cfg, store, out):
         out(textfmt.table(["이름", "낸 회비", "부족액"], rows, numeric={1, 2}))
         return False
 
-    out("사용법: moim budget status|category|pay|balance|unpaid")
+    if c == "table":
+        month = _month_of(args)
+        rows = feat.budget_table(store, cfg, month)
+        body = [(cat, _cell(b), spent, _cell(diff)) for cat, b, spent, diff in rows[:-1]]
+        _label, tb, ts, td = rows[-1]
+        foot = ("합계", _cell(tb), ts, _cell(td))
+        out(textfmt.table(["분류", "예산", "실제", "차이"], body, total=foot, numeric={1, 2, 3}))
+        return False
+
+    out("사용법: moim budget status|category|forecast|pay|balance|unpaid|table")
     return False
