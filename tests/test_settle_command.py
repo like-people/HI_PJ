@@ -164,6 +164,49 @@ class Transfer(SettleCommandCase):
                 self.assertEqual(self.data_text(), before)
 
 
+class Exclude(SettleCommandCase):
+    def saved(self):
+        with open(self.path("data.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_excludes_and_saves_with_history(self):
+        # 9,000원을 셋이 나누다 박지훈을 빼면 김·이가 4,500원씩(공고문 선택: 이 기능의 명령, 수정 이력에 남김)
+        self.put(1, "2026-11-12", KIM, 9000)
+        code, text = self.settle("exclude", "1", "--member", PARK)
+        self.assertEqual(code, 0)
+        self.assertEqual(text.splitlines(), [f"1번 지출에서 뺐습니다: {PARK}", f"부담: {KIM} 4,500원 · {LEE} 4,500원"])
+        data = self.saved()
+        self.assertEqual(data["expenses"][0]["members"], [KIM, LEE])
+        self.assertEqual(data["history"][-1]["action"], "exclude")
+        self.assertEqual(data["history"][-1]["before"]["members"], NAMES)
+
+    def test_shows_in_expense_history(self):
+        self.put(1, "2026-11-12", KIM, 9000)
+        self.settle("exclude", "1", "--member", PARK)
+        self.store = Store(self.path("data.json")).load()   # settle() 이 self.store 를 다시 저장하므로 명령이 저장한 자료로 바꾼다
+        self.store.save()
+        output = []
+        main(["--config", self.config, "exp", "history", "1"], output.append)
+        self.assertIn("참여자 빼기", "\n".join(output))
+
+    def test_rejects_without_saving(self):
+        self.put(1, "2026-12-02", KIM, 9000, members=[KIM])
+        self.put(2, "2026-11-12", KIM, 9000)
+        self.store.data["locks"].append({"start": "2026-11-01", "end": "2026-11-30"})
+        self.put(3, "2026-12-01", KIM, 9000)
+        self.store.save()
+        before = self.data_text()
+        for eid, name, reason in (("9", PARK, "9번 지출이 없습니다"),
+                                  ("1", KIM, "참여자가 한 명뿐이라"),
+                                  ("2", PARK, "정산이 확정된 날짜의 지출은"),
+                                  ("3", "명부에없음", "3번 지출의 참여자가 아닙니다")):
+            with self.subTest(eid=eid):
+                code, text = self.settle("exclude", eid, "--member", name)
+                self.assertEqual(code, 1)
+                self.assertTrue(text.startswith("오류: " + reason), text)
+                self.assertEqual(self.data_text(), before)
+
+
 class Unknown(SettleCommandCase):
     def test_unknown_subcommand(self):
         code, text = self.settle()

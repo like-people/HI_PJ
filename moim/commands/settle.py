@@ -6,6 +6,7 @@ run 은 자료를 바꿨으면 True 를 돌려준다(통합 실행 틀이 그때
 """
 
 from ..common.cliutil import _period
+from ..common.queries import expense_shares
 from ..common.textfmt import table
 from ..features import settle as feat
 
@@ -30,6 +31,10 @@ def add_parser(sub, period_args):
     s.add_argument("--from", dest="frm", required=True, help="보낸 사람")
     s.add_argument("--to", required=True, help="받은 사람")
     s.add_argument("--amount", required=True, help="송금액")
+
+    s = grp.add_parser("exclude", help="특정 지출에서 특정 사람 빼기(남은 사람이 나눔, 수정 이력에 남음)")
+    s.add_argument("eid", type=int, help="지출 번호")
+    s.add_argument("--member", required=True, help="뺄 사람")
     return grp
 
 
@@ -71,6 +76,14 @@ def run(c, args, cfg, store, out):
     if c == "transfer":
         t = feat.record_transfer(store, args.date, args.frm, args.to, args.amount)
         out(f"송금을 기록했습니다: {t['date']} {t['from']} → {t['to']} {t['amount']:,}원")
+        return True
+
+    if c == "exclude":
+        # 이력은 exclude_member 가 "exclude" 로 남긴다(규격 4-4 2번). exp history 에 "참여자 빼기"로 보인다.
+        e = feat.exclude_member(store, args.eid, args.member)
+        out(f"{e['id']}번 지출에서 뺐습니다: {args.member}")
+        shares = expense_shares(e)
+        out("부담: " + " · ".join(f"{name} {won:,}원" for name, won in shares.items()))
         return True
 
     out(f"아직 만들지 않은 명령입니다: {GROUP} {c or ''}".rstrip())
