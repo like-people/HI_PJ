@@ -23,6 +23,14 @@ def add_parser(sub, period_args):
         help="실제 등록 없이 가져오기 결과 미리 확인",
     )
 
+    s.add_argument(
+        "--map",
+        action="append",
+        default=[],
+        metavar="열이름=필드",
+        help="CSV 열 이름을 내부 필드에 연결(여러 번 지정 가능)",
+    )
+
     s = grp.add_parser("export", help="지출 내보내기(파일 이름이 .json 이면 JSON, 아니면 CSV)")
     s.add_argument("file", help="내보낼 파일")
     period_args(s)
@@ -68,9 +76,44 @@ def _range(args):
 
 def run(c, args, cfg, store, out):
     if c == "import":
+        mapping = {}
+        valid_fields = {
+            "date",
+            "payer",
+            "amount",
+            "members",
+            "weights",
+            "category",
+            "memo",
+        }
+
+        for item in args.map:
+            if "=" not in item:
+                raise ValueError(
+                    f"--map 형식은 열이름=필드여야 합니다: {item}"
+                )
+
+            column, field = item.split("=", 1)
+            column = column.strip()
+            field = field.strip()
+
+            if not column or not field:
+                raise ValueError("--map의 열 이름과 필드는 비워둘 수 없습니다")
+
+            if column in mapping:
+                raise ValueError(f"중복된 CSV 열 매핑입니다: {column}")
+
+            if field not in valid_fields:
+                raise ValueError(
+                    f"지원하지 않는 필드입니다: {field}"
+                )
+
+            mapping[column] = field
+
         result = feat.import_csv(
             store,
             args.file,
+            mapping=mapping or None,
             preview=args.preview,
         )
 

@@ -1,3 +1,4 @@
+import csv
 import argparse
 from unittest.mock import patch
 import unittest
@@ -32,6 +33,17 @@ class TransferIOCommandTests(unittest.TestCase):
         )
         self.assertTrue(preview_args.preview)
 
+        mapped_args = self.parse(
+            "import",
+            "expenses.csv",
+            "--map", "날짜=date",
+            "--map", "낸 사람=payer",
+        )
+        self.assertEqual(
+            mapped_args.map,
+            ["날짜=date", "낸 사람=payer"],
+        )
+
     def test_import_calls_import_csv_and_returns_true_when_added(self):
         args = self.parse("import", "expenses.csv")
         store = object()
@@ -51,7 +63,10 @@ class TransferIOCommandTests(unittest.TestCase):
             changed = run(args.cmd, args, None, store, output.append)
 
         import_csv.assert_called_once_with(
-            store, "expenses.csv", preview=False
+            store,
+            "expenses.csv",
+            mapping=None,
+            preview=False,
         )
         self.assertTrue(changed)
         self.assertIn("추가 1건", output[0])
@@ -79,8 +94,12 @@ class TransferIOCommandTests(unittest.TestCase):
             changed = run(args.cmd, args, None, store, output.append)
 
         import_csv.assert_called_once_with(
-            store, "expenses.csv", preview=True
+            store,
+            "expenses.csv",
+            mapping=None,
+            preview=True,
         )
+
         self.assertFalse(changed)
         self.assertIn("미리보기", output[0])
         self.assertIn(
@@ -308,6 +327,51 @@ class RoundtripIntegrationTests(StoreCase):
         )
 
         self.assertEqual(different, [])
+
+    def test_import_command_with_korean_column_mapping(self):
+        kim, lee, park = NAMES
+        path = self.path("mapped.csv")
+
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["날짜", "낸 사람", "금액", "참여자"],
+            )
+            writer.writeheader()
+            writer.writerow({
+                "날짜": "2026-11-10",
+                "낸 사람": kim,
+                "금액": "3000",
+                "참여자": ";".join(NAMES),
+            })
+
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="group")
+        add_parser(sub, TransferIOCommandTests.period_args)
+
+        args = parser.parse_args([
+            "io",
+            "import",
+            path,
+            "--map", "날짜=date",
+            "--map", "낸 사람=payer",
+            "--map", "금액=amount",
+            "--map", "참여자=members",
+        ])
+
+        output = []
+        changed = run(args.cmd, args, self.cfg, self.store, output.append)
+
+        self.assertTrue(changed)
+        self.assertEqual(len(self.store.data["expenses"]), 1)
+
+        expense = self.store.data["expenses"][0]
+        self.assertEqual(expense["date"], "2026-11-10")
+        self.assertEqual(expense["payer"], kim)
+        self.assertEqual(expense["amount"], 3000)
+        self.assertEqual(expense["members"], NAMES)
+        self.assertIn("추가 1건", output[0])
+        self.assertIn("오류 0줄", output[0])
 
 
 if __name__ == "__main__":
