@@ -15,6 +15,22 @@ GROUP = 'io'
 def add_parser(sub, period_args):
     grp = sub.add_parser(GROUP, help="가져오기·내보내기").add_subparsers(dest="cmd")
 
+    s = grp.add_parser("import", help="CSV 지출 가져오기")
+    s.add_argument("file", help="가져올 CSV 파일")
+    s.add_argument(
+        "--preview",
+        action="store_true",
+        help="실제 등록 없이 가져오기 결과 미리 확인",
+    )
+
+    s.add_argument(
+        "--map",
+        action="append",
+        default=[],
+        metavar="열이름=필드",
+        help="CSV 열 이름을 내부 필드에 연결(여러 번 지정 가능)",
+    )
+
     s = grp.add_parser("export", help="지출 내보내기(파일 이름이 .json 이면 JSON, 아니면 CSV)")
     s.add_argument("file", help="내보낼 파일")
     period_args(s)
@@ -62,6 +78,74 @@ def _range(args):
 
 
 def run(c, args, cfg, store, out):
+    if c == "import":
+        mapping = {}
+        valid_fields = {
+            "date",
+            "payer",
+            "amount",
+            "members",
+            "weights",
+            "category",
+            "memo",
+        }
+
+        for item in args.map:
+            if "=" not in item:
+                raise ValueError(
+                    f"--map 형식은 열이름=필드여야 합니다: {item}"
+                )
+
+            column, field = item.split("=", 1)
+            column = column.strip()
+            field = field.strip()
+
+            if not column or not field:
+                raise ValueError("--map의 열 이름과 필드는 비워둘 수 없습니다")
+
+            if column in mapping:
+                raise ValueError(f"중복된 CSV 열 매핑입니다: {column}")
+
+            if field not in valid_fields:
+                raise ValueError(
+                    f"지원하지 않는 필드입니다: {field}"
+                )
+
+            mapping[column] = field
+
+        result = feat.import_csv(
+            store,
+            args.file,
+            mapping=mapping or None,
+            preview=args.preview,
+        )
+
+        added = result["added"]
+        duplicates = result["duplicates"]
+        errors = result["errors"]
+
+        label = "미리보기" if args.preview else "가져오기 완료"
+
+        out(
+            f"{label}: {args.file} "
+            f"(인코딩 {result['encoding']}, "
+            f"추가 {len(added)}건, "
+            f"중복 {len(duplicates)}건, "
+            f"오류 {len(errors)}줄)"
+        )
+
+        if duplicates:
+            lines = ", ".join(map(str, duplicates))
+            out(f"중복 의심 줄: {lines}")
+
+        for line_no, reason in errors:
+            out(f"{line_no}번째 줄: {reason}")
+
+        if args.preview:
+            out("미리보기이므로 실제 자료는 변경하지 않았습니다.")
+
+        return bool(added) and not args.preview
+
     if c == "export":
         start, end = _range(args)
         export = feat.export_json if args.file.lower().endswith(".json") else feat.export_csv
