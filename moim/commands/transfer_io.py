@@ -34,6 +34,9 @@ def add_parser(sub, period_args):
     )
     s.add_argument("file", help="복원할 백업 파일 경로")
 
+    s = grp.add_parser("merge", help="다른 모임 백업 자료를 현재 자료에 병합")
+    s.add_argument("file", help="병합할 백업 파일 경로")
+
     s = grp.add_parser("total", help="파일의 지출 건수와 합계 확인")
     s.add_argument("file", help="확인할 CSV 또는 JSON 파일")
 
@@ -85,6 +88,54 @@ def run(c, args, cfg, store, out):
         out(f"복원했습니다: {args.file}")
         out("주의: 백업 파일의 모임 전체 자료로 현재 자료를 교체했습니다.")
         return True
+
+    if c == "merge":
+        members_before = len(store.data["members"])
+        expenses_before = len(store.data["expenses"])
+
+        report = {}
+        added = feat.merge(store, args.file, report=report)
+
+        members_added = len(store.data["members"]) - members_before
+
+        out(
+            f"병합했습니다: {args.file} "
+            f"(회원 {members_added}명, 지출 {added}건 추가)"
+        )
+
+        skipped_members = [
+            item for item in report.get("skipped", [])
+            if item["kind"] == "member"
+        ]
+        skipped_expenses = [
+            item for item in report.get("skipped", [])
+            if item["kind"] == "expense"
+        ]
+
+        for item in skipped_members:
+            out(
+                f"회원 추가 건너뜀 ({item['id']}): "
+                f"{item['reason']}"
+            )
+
+        for item in skipped_expenses:
+            out(
+                f"원본 지출 {item['id']}번 추가 건너뜀: "
+                f"{item['reason']}"
+            )
+
+        duplicates = report.get("duplicates", [])
+        if duplicates:
+            original_ids = ", ".join(
+                str(item["id"]) for item in duplicates
+            )
+            out(
+                f"중복 의심 지출 {len(duplicates)}건도 등록했습니다. "
+                f"(원본 지출 번호: {original_ids})"
+            )
+
+        expenses_added = len(store.data["expenses"]) - expenses_before
+        return members_added > 0 or expenses_added > 0
 
     if c == "total":
         count, total = feat.file_total(args.file)
